@@ -48,6 +48,9 @@ func LoadClient(filepath string) (*Client, error) {
 }
 
 func (c *Client) StoreToFile(filepath string) error {
+	if c.page == nil {
+		return nil
+	}
 	cookies, err := c.page.Context().Cookies()
 	if err != nil {
 		return err
