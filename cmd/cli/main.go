@@ -41,7 +41,20 @@ func main() {
 	defer input.Close()
 
 	parser := request_parsing.NewParser(*venmoCol, *amtCol, *noteCol, rune((*separator)[0]), *hasHeader)
-	fmt.Println(parser.Parse(input))
+	requests, err := parser.Parse(input)
+	if err != nil {
+		panic(fmt.Sprintf("error parsing input: %s", err))
+	}
+
+	for _, request := range requests {
+		for _, batch := range request.VenmoBatches {
+			venmoStr := batch[0]
+			if len(batch) > 1 {
+				venmoStr = fmt.Sprintf("%d venmos", len(batch))
+			}
+			fmt.Printf("%-30s %6.02f  %s\n", request.Note, request.Amount, venmoStr)
+		}
+	}
 }
 
 func getInput(filepath string) io.ReadCloser {
@@ -53,6 +66,11 @@ func getInput(filepath string) io.ReadCloser {
 		return file
 	}
 
-	fmt.Println("Paste your input, then press enter:")
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		panic(fmt.Sprintf("error getting stat for stdin: %s", err))
+	} else if stat.Size() == 0 {
+		panic("no input provided. Pipe something into stdin or specify a file with -f")
+	}
 	return os.Stdin
 }

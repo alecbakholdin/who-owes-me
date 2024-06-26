@@ -13,7 +13,7 @@ func TestParsedRequests(t *testing.T) {
 		pr.AddVenmo("venmo1")
 
 		assert.Equal(t, 1, pr.Size())
-		assert.Equal(t, "venmo1", pr.venmoBatches[0][0])
+		assert.Equal(t, "venmo1", pr.VenmoBatches[0][0])
 	})
 
 	t.Run("adding more than one batch of venmos", func(t *testing.T) {
@@ -25,7 +25,7 @@ func TestParsedRequests(t *testing.T) {
 		assert.Equal(t, 30, pr.Size())
 		for i := range 3 {
 			for j := range 10 {
-				assert.Equal(t, fmt.Sprintf("venmo%d", i * 10 + j), pr.venmoBatches[i][j])
+				assert.Equal(t, fmt.Sprintf("venmo%d", i*10+j), pr.VenmoBatches[i][j])
 			}
 		}
 	})

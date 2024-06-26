@@ -1,7 +1,7 @@
 package request_parsing
 
 type ParsedRequests struct {
-	venmoBatches [][]string
+	VenmoBatches [][]string
 	Amount       float64
 	Note         string
 }
@@ -9,22 +9,22 @@ type ParsedRequests struct {
 // number of venmos in this request
 func (p *ParsedRequests) Size() int {
 	size := 0
-	for _, b := range p.venmoBatches {
+	for _, b := range p.VenmoBatches {
 		size += len(b)
 	}
 	return size
 }
 
 func (p *ParsedRequests) AddVenmo(venmo string) {
-	if p.venmoBatches == nil {
-		p.venmoBatches = [][]string{{venmo}}
+	if p.VenmoBatches == nil {
+		p.VenmoBatches = [][]string{{venmo}}
 		return
 	}
-	for i, batch := range p.venmoBatches {
+	for i, batch := range p.VenmoBatches {
 		if len(batch) < 10 {
-			p.venmoBatches[i] = append(batch, venmo)
+			p.VenmoBatches[i] = append(batch, venmo)
 			return
 		}
 	}
-	p.venmoBatches = append(p.venmoBatches, []string{venmo})
+	p.VenmoBatches = append(p.VenmoBatches, []string{venmo})
 }

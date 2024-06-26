@@ -45,6 +45,7 @@ func (p *Parser) Parse(r io.Reader) ([]ParsedRequests, error) {
 	skip := p.HasHeader
 	for {
 		line, err := reader.Read()
+		fmt.Println(line)
 		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
@@ -60,12 +61,12 @@ func (p *Parser) Parse(r io.Reader) ([]ParsedRequests, error) {
 			return nil, fmt.Errorf("expected at least %d cols but found %d for line %v", p.MaxCol+1, len(line), line)
 		}
 
-		venmo := line[p.VenmoCol]
+		venmo := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(line[p.VenmoCol]), "@"))
 		amt, err := p.parseAmount(line[p.AmountCol])
 		if err != nil {
 			return nil, err
 		}
-		note := line[p.NoteCol]
+		note := strings.TrimSpace(line[p.NoteCol])
 
 		key := fmt.Sprintf("%s_%.02f", note, amt)
 		pr, ok := requestMap[key]
@@ -83,7 +84,7 @@ func (p *Parser) Parse(r io.Reader) ([]ParsedRequests, error) {
 	sort.Slice(arr, func(i, j int) bool {
 		return cmp.Or(
 			strings.Compare(arr[i].Note, arr[j].Note) < 0,
-			arr[i].Amount < arr[i].Amount,
+			arr[i].Amount < arr[j].Amount,
 		)
 	})
 	return arr, nil
