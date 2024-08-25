@@ -23,12 +23,6 @@ func main() {
 	hasHeader := flag.Bool("header", false, "Ignore first line, since it is a header")
 	flag.Parse()
 
-	client, err := venmo.LoadClient(defaultClientPath)
-	if err != nil {
-		fmt.Printf("Error loading client (%s), loading new client\n", err)
-		client = venmo.NewClient()
-	}
-	defer client.StoreToFile(defaultClientPath)
 
 	if *venmoCol == *amtCol || *venmoCol == *noteCol || *amtCol == *noteCol {
 		panic(fmt.Sprintf("Cols must be distinct indices, but found venmo[%d], amount[%d], note[%d]", *venmoCol, *amtCol, *noteCol))
@@ -46,6 +40,8 @@ func main() {
 		panic(fmt.Sprintf("error parsing input: %s", err))
 	}
 
+	totalSent := float64(0)
+	totalRequested := float64(0)
 	for _, request := range requests {
 		for _, batch := range request.VenmoBatches {
 			venmoStr := batch[0]
@@ -53,6 +49,47 @@ func main() {
 				venmoStr = fmt.Sprintf("%d venmos", len(batch))
 			}
 			fmt.Printf("%-30s %6.02f  %s\n", request.Note, request.Amount, venmoStr)
+			if request.Amount > 0 {
+				totalRequested += request.Amount * float64(len(batch))
+			} else {
+				totalSent += -1 * request.Amount * float64(len(batch))
+			}
+		}
+	}
+	width := 25
+	fmt.Printf("%-*s %0.02f\n", width, "Total Being Sent:", totalSent)
+	fmt.Printf("%-*s %0.02f\n", width, "Total Requested:", totalRequested)
+	fmt.Printf("%-*s %0.02f\n", width, "Total Net:", totalRequested - totalSent)
+	fmt.Printf("Confirm these transactions? (y/n)")
+	var str string
+	if n, err := fmt.Scan(&str); err != nil {
+		panic(fmt.Sprintf("error reading from stdin: %s", err))
+	} else if n != 1 {
+		panic(fmt.Sprintf("expected one character from stdin, but read %d", n))
+	}
+	r  := str[0]
+	if r == 'y' || r == 'Y' || r == '\n' || r == '\r'  {
+		fmt.Println("Sending requests")
+	} else if r == 'n' || r == 'N' {
+		return
+	} else {
+		panic(fmt.Sprintf("unexpected character %c", r))
+	}
+
+	client, err := venmo.LoadClient(defaultClientPath)
+	if err != nil {
+		fmt.Printf("Error loading client (%s), loading new client\n", err)
+		client = venmo.NewClient()
+	}
+	defer client.StoreToFile(defaultClientPath)
+	if err := client.Login(*username, *password); err != nil {
+		panic(fmt.Sprintf("error logging in: %s", err))
+	}
+	for _, r := range requests {
+		for _, b := range r.VenmoBatches {
+			if err := client.ProcessPayment(r.Amount, r.Note, b); err != nil {
+				fmt.Printf("Error processing batch %s %.02f %v: %s\n", r.Note, r.Amount, b, err)
+			}
 		}
 	}
 }

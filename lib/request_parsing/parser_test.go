@@ -55,6 +55,14 @@ func TestParser(t *testing.T) {
 			assert.Equal(t, 1, len(arr))
 			assert.Equal(t, ParsedRequests{VenmoBatches: [][]string{{"venmo"}}, Amount: 1.23, Note: "note"}, arr[0])
 		})
+		t.Run("dollar amount with comma", func(t *testing.T) {
+			r := strings.NewReader("venmo\t$ 1,000.23\tnote")
+			parser := NewParser(0, 1, 2, '\t', false)
+			arr, err := parser.Parse(r)
+			assert.Nil(t, err)
+			assert.Equal(t, 1, len(arr))
+			assert.Equal(t, ParsedRequests{VenmoBatches: [][]string{{"venmo"}}, Amount: 1000.23, Note: "note"}, arr[0])
+		})
 		t.Run("negative dollar amount", func(t *testing.T) {
 			r := strings.NewReader("venmo\t$ -1.23\tnote")
 			parser := NewParser(0, 1, 2, '\t', false)

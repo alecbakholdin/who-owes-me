@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"strings"
+
+	"github.com/playwright-community/playwright-go"
 )
 
 func (v *Client) goToUrl(url string) error {
@@ -50,6 +52,7 @@ func (v *Client) clickSearchedPaymentVenmo(venmo string) error {
 	if page, err := v.initPage(); err != nil {
 		return err
 	} else {
+		page.Locator("li").GetByText(fmt.Sprintf("@%s", formattedVenmo), playwright.LocatorGetByTextOptions{Exact: playwright.Bool(true)})
 		venmoLiItem := page.Locator(fmt.Sprintf("li img[alt='%s'i]", formattedVenmo))
 		return cmp.Or(
 			venmoLiItem.WaitFor(),

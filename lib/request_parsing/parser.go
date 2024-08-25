@@ -101,7 +101,7 @@ func (p *Parser) Parse(r io.Reader) ([]ParsedRequests, error) {
 // $ (1.23)
 // $(1.23)
 func (p *Parser) parseAmount(str string) (float64, error) {
-	str = strings.TrimSpace(strings.Replace(str, "$", "", 1))
+	str = strings.TrimSpace(strings.ReplaceAll(strings.Replace(str, "$", "", 1), ",", ""))
 	leftP := strings.IndexRune(str, '(')
 	rightP := strings.IndexRune(str, ')')
 	var negate float64 = 1
