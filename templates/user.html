@@ -1,0 +1,69 @@
+{{ define "content" }}
+<div class="mb-5">
+    <div class="is-flex is-justify-content-space-between is-align-items-center">
+        <div>
+            <h1 class="title is-2 has-text-weight-bold">
+                <i class="fas fa-user-circle mr-2"></i> {{ .User.Name }}
+            </h1>
+            <p class="subtitle is-6 has-text-grey">
+                <span class="tag {{ formatAidClassColor .User.AidClass }}">{{ formatAidClassLabel .User.AidClass }}</span>
+            </p>
+        </div>
+        <div class="tag is-large px-5 py-3 has-text-weight-bold is-size-5 {{ if lt .Balance 0 }}is-danger{{ else if gt .Balance 0 }}is-success{{ else }}is-light{{ end }}" style="border-radius: 12px;">
+            <i class="fas {{ if lt .Balance 0 }}fa-arrow-down{{ else if gt .Balance 0 }}fa-arrow-up{{ else }}fa-circle{{ end }} mr-2"></i>
+            Balance: {{ formatMoney .Balance }}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <header class="card-header">
+        <p class="card-header-title">
+            <i class="fas fa-book mr-2"></i> Ledger
+        </p>
+    </header>
+    <div class="card-content p-0" style="overflow-x: auto;">
+        <table class="table is-fullwidth is-striped" style="white-space: nowrap;">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th style="max-width: 400px;">Note</th>
+                    <th class="has-text-right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ range .Deposits }}
+                <tr>
+                    <td class="has-text-grey">{{ formatDate .Date }}</td>
+                    <td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ .Notes }}</td>
+                    <td class="has-text-right has-text-weight-bold has-text-success">+{{ formatMoney .Amount }}</td>
+                </tr>
+                {{ end }}
+
+                {{ range .Splits }}
+                <tr>
+                    <td class="has-text-grey">{{ index $.TxDateMap .ActualTransactionID }}</td>
+                    <td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Expense Share</td>
+                    <td class="has-text-right has-text-weight-bold has-text-danger">-{{ formatMoney .AmountOwed }}</td>
+                </tr>
+                {{ end }}
+
+                {{ if and (eq (len .Deposits) 0) (eq (len .Splits) 0) }}
+                <tr>
+                    <td colspan="3" class="has-text-centered has-text-grey py-5">
+                        <i class="fas fa-inbox fa-2x mb-2" style="display: block;"></i>
+                        No transactions yet
+                    </td>
+                </tr>
+                {{ end }}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+.card { border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); border: 1px solid var(--bulma-border); }
+.card-header { border-radius: 12px 12px 0 0; border-bottom: 1px solid var(--bulma-border); background: var(--bulma-scheme-main-bis); }
+.card-header-title { font-weight: 600; }
+</style>
+{{ end }}

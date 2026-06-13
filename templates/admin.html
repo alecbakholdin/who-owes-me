@@ -1,0 +1,1109 @@
+{{ define "content" }}
+<div class="mb-5">
+  <h1 class="title is-2 has-text-weight-bold">
+    <i class="fas fa-cogs mr-2"></i> Admin Dashboard
+  </h1>
+</div>
+
+{{ if .Error }}
+<div class="notification is-danger is-light">
+    <button class="delete" onclick="this.parentElement.style.display='none'; const url = new URL(window.location); url.searchParams.delete('error'); window.history.replaceState({}, '', url);"></button>
+    <strong>Error:</strong> {{ .Error }}
+</div>
+{{ end }}
+
+{{ if gt (len .APIErrors) 0 }}
+<div class="notification is-warning is-light">
+    <button class="delete" onclick="this.parentElement.style.display='none'"></button>
+    <p><strong>Actual API Integration Warnings:</strong></p>
+    <ul>
+        {{ range .APIErrors }}
+        <li><code style="font-size: 0.8em; white-space: pre-wrap;">{{ . }}</code></li>
+        {{ end }}
+    </ul>
+</div>
+{{ end }}
+
+<div x-data="adminDashboard()">
+    <div class="card mb-5">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <i class="fas fa-user-plus mr-2"></i> Add User
+                </p>
+            </header>
+            <div class="card-content">
+                <form action="/admin/users" method="POST">
+                    <div class="field">
+                        <label class="label">Name</label>
+                        <div class="control has-icons-left">
+                            <input class="input" type="text" name="name" placeholder="e.g. John Doe" required>
+                            <span class="icon is-left is-small"><i class="fas fa-user"></i></span>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">OIDC Subject (sub)</label>
+                        <div class="control has-icons-left">
+                            <input class="input" type="text" name="oidc_sub" placeholder="Unique identifier from Authelia" required>
+                            <span class="icon is-left is-small"><i class="fas fa-id-badge"></i></span>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Aid Class</label>
+                        <div class="control has-icons-left">
+                            <div class="select is-fullwidth">
+                                <select name="aid_class">
+                                    <option value="regular">Regular</option>
+                                    <option value="needs_help">Needs Help</option>
+                                    <option value="will_help">Will Help</option>
+                                </select>
+                            </div>
+                            <span class="icon is-left is-small"><i class="fas fa-hands-helping"></i></span>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Actual Payee</label>
+                        <div class="control" x-data="payeeSearch()">
+                            <input type="hidden" name="actual_payee_id" :value="selectedPayeeId">
+                            
+                            <div class="dropdown" :class="{'is-active': open && filteredPayees.length > 0}" style="width: 100%;">
+                                <div class="dropdown-trigger" style="width: 100%;">
+                                    <input class="input" type="text" x-model="search" placeholder="Search payees..." 
+                                           @focus="open = true" 
+                                           @click.away="open = false"
+                                           @keydown.escape="open = false"
+                                           @keydown.down.prevent="highlightedIndex = Math.min(highlightedIndex + 1, filteredPayees.length - 1)"
+                                           @keydown.up.prevent="highlightedIndex = Math.max(highlightedIndex - 1, 0)"
+                                           @keydown.enter.prevent="highlightedIndex >= 0 && filteredPayees[highlightedIndex] && selectPayee(filteredPayees[highlightedIndex])"
+                                           @input="highlightedIndex = -1">
+                                </div>
+                                <div class="dropdown-menu" style="width: 100%;">
+                                    <div class="dropdown-content" style="max-height: 200px; overflow-y: auto;">
+                                        <template x-for="(p, i) in filteredPayees" :key="p.id">
+                                            <a class="dropdown-item" :class="{'is-active': i === highlightedIndex}" @click="selectPayee(p)" @mouseenter="highlightedIndex = i" x-text="p.name"></a>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="help is-success" x-show="selectedPayeeId">
+                                <i class="fas fa-check-circle mr-1"></i> Selected: <strong x-text="selectedPayeeName"></strong>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="control mt-5">
+                        <button class="button is-primary is-fullwidth">
+                            <i class="fas fa-plus mr-1"></i> Create User
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+            <div class="card">
+                <header class="card-header">
+                    <p class="card-header-title">
+                        <i class="fas fa-users mr-2"></i> Current Users
+                    </p>
+                    <div class="card-header-icon" style="flex: 1; justify-content: flex-end;">
+                        <input class="input is-small" type="text" x-model="userSearch" placeholder="Search users..." style="max-width: 240px;">
+                    </div>
+                </header>
+                <div class="card-content p-0">
+                    <div style="overflow-x: auto;">
+                    <table class="table is-fullwidth is-striped is-narrow" style="white-space: nowrap;">
+                        <thead>
+                            <tr>
+                                <th style="width: 24px;"></th>
+                                <th>Name</th>
+                                <th>Aid Class</th>
+                                <th class="has-text-right">Balance</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="u in paginatedUsers" :key="u.id">
+                                <tr>
+                                    <td>
+                                        <template x-if="u.actual_payee_id">
+                                            <span class="has-text-success"><i class="fas fa-link" title="Linked"></i></span>
+                                        </template>
+                                        <template x-if="!u.actual_payee_id">
+                                            <span class="has-text-danger"><i class="fas fa-unlink" title="Unlinked"></i></span>
+                                        </template>
+                                    </td>
+                                    <td><a :href="'/users/' + u.oidc_sub" class="has-text-weight-medium" x-text="u.name"></a></td>
+                                    <td><span class="tag is-small" :class="aidClassColor(u.aid_class)" x-text="aidClassLabel(u.aid_class)"></span></td>
+                                    <td class="has-text-right has-text-weight-bold" :class="u.balance < 0 ? 'has-text-danger' : u.balance > 0 ? 'has-text-success' : ''" x-text="formatCents(u.balance)"></td>
+                                    <td>
+                                        <button class="button is-small is-light" @click="openEditModal(u.id, u.name, u.oidc_sub, u.aid_class, u.actual_payee_id)">
+                                            <i class="fas fa-pen"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="allUsers.length === 0">
+                                <td colspan="4" class="has-text-centered has-text-grey py-4">No users added yet</td>
+                            </tr>
+                    </tbody>
+                </table>
+                    </div>
+                    <div class="px-3 py-3 is-flex is-justify-content-space-between is-align-items-center" x-show="totalUserPages > 1" style="border-top: 1px solid #dbdbdb;">
+                        <div class="field has-addons">
+                            <p class="control">
+                                <button class="button is-small" :disabled="userPage === 1" @click="userPage--">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                            </p>
+                            <p class="control">
+                                <button class="button is-small" :disabled="userPage === totalUserPages" @click="userPage++">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </p>
+                        </div>
+                        <span class="has-text-grey is-size-7" x-text="'Page ' + userPage + ' of ' + totalUserPages"></span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Edit User Modal -->
+        <div class="modal" :class="{'is-active': editModalOpen}">
+            <div class="modal-background" @click="editModalOpen = false"></div>
+            <div class="modal-card">
+                <header class="modal-card-head">
+                    <p class="modal-card-title"><i class="fas fa-user-edit mr-2"></i> Edit User</p>
+                    <button class="delete" aria-label="close" @click="editModalOpen = false"></button>
+                </header>
+                <section class="modal-card-body">
+                    <form action="/admin/users/update" method="POST" id="editUserForm">
+                        <input type="hidden" name="id" x-model="editingUser.id">
+                        
+                        <div class="field">
+                            <label class="label">Name</label>
+                            <div class="control has-icons-left">
+                                <input class="input" type="text" name="name" x-model="editingUser.name" required>
+                                <span class="icon is-left is-small"><i class="fas fa-user"></i></span>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label class="label">OIDC Subject (sub)</label>
+                            <div class="control has-icons-left">
+                                <input class="input" type="text" name="oidc_sub" x-model="editingUser.oidcSub" required>
+                                <span class="icon is-left is-small"><i class="fas fa-id-badge"></i></span>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label class="label">Aid Class</label>
+                            <div class="control has-icons-left">
+                                <div class="select is-fullwidth">
+                                    <select name="aid_class" x-model="editingUser.aidClass">
+                                        <option value="regular">Regular</option>
+                                        <option value="needs_help">Needs Help</option>
+                                        <option value="will_help">Will Help</option>
+                                    </select>
+                                </div>
+                                <span class="icon is-left is-small"><i class="fas fa-hands-helping"></i></span>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label class="label">Actual Payee</label>
+                            <div class="control">
+                                <input type="hidden" name="actual_payee_id" :value="editSelectedPayeeId">
+                                
+                                <div class="dropdown" :class="{'is-active': editPayeeOpen && editFilteredPayees.length > 0}" style="width: 100%;">
+                                    <div class="dropdown-trigger" style="width: 100%;">
+                                        <input class="input" type="text" x-model="editPayeeSearch" placeholder="Search payees..." 
+                                               @focus="editPayeeOpen = true" 
+                                               @click.away="editPayeeOpen = false"
+                                               @keydown.escape="editPayeeOpen = false"
+                                               @keydown.down.prevent="editPayeeHighlightedIndex = Math.min(editPayeeHighlightedIndex + 1, editFilteredPayees.length - 1)"
+                                               @keydown.up.prevent="editPayeeHighlightedIndex = Math.max(editPayeeHighlightedIndex - 1, 0)"
+                                               @keydown.enter.prevent="editPayeeHighlightedIndex >= 0 && editFilteredPayees[editPayeeHighlightedIndex] && editSelectPayee(editFilteredPayees[editPayeeHighlightedIndex])"
+                                               @input="editPayeeHighlightedIndex = -1">
+                                    </div>
+                                    <div class="dropdown-menu" style="width: 100%;">
+                                        <div class="dropdown-content" style="max-height: 200px; overflow-y: auto;">
+                                            <template x-for="(p, i) in editFilteredPayees" :key="p.id">
+                                                <a class="dropdown-item" :class="{'is-active': i === editPayeeHighlightedIndex}" @click="editSelectPayee(p)" @mouseenter="editPayeeHighlightedIndex = i" x-text="p.name"></a>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p class="help is-success" x-show="editSelectedPayeeId">
+                                    <i class="fas fa-check-circle mr-1"></i> Selected: <strong x-text="editSelectedPayeeName"></strong>
+                                    <a class="ml-3 has-text-danger" href="#" @click.prevent="editSelectedPayeeId = ''; editSelectedPayeeName = ''; editPayeeSearch = ''"><i class="fas fa-unlink mr-1"></i>Unlink</a>
+                                </p>
+                            </div>
+                        </div>
+                    </form>
+                </section>
+                <footer class="modal-card-foot">
+                    <button type="submit" form="editUserForm" class="button is-success">
+                        <i class="fas fa-save mr-1"></i> Save changes
+                    </button>
+                    <button type="button" class="button" @click="editModalOpen = false">Cancel</button>
+                </footer>
+            </div>
+        </div>
+
+        <div class="card mb-5" x-data="paymentsTable()">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <i class="fas fa-arrow-up mr-2"></i> Payments
+                </p>
+                <div class="card-header-icon" style="flex: 1; justify-content: flex-end;">
+                    <input class="input is-small" type="text" x-model="search" placeholder="Search payments..." style="max-width: 240px;">
+                </div>
+            </header>
+            <div class="card-content p-0">
+                <div style="overflow-x: auto;">
+                    <table class="table is-fullwidth is-striped" style="white-space: nowrap;">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Payee</th>
+                                <th>Mapped User</th>
+                                <th>Note</th>
+                                <th class="has-text-right">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="p in paginatedPayments" :key="p.id">
+                                <tr>
+                                    <td class="has-text-grey" x-text="formatDate(p.date)"></td>
+                                    <td x-text="payeeName(p.payee)"></td>
+                                    <td>
+                                        <template x-if="p.has_mapped_user">
+                                            <span class="has-text-weight-medium" x-text="p.mapped_user_name"></span>
+                                        </template>
+                                        <template x-if="!p.has_mapped_user">
+                                            <button class="button is-small is-danger is-light" @click="openAssign(p.payee, p.id)">
+                                                <i class="fas fa-user-plus mr-1"></i> Assign
+                                            </button>
+                                        </template>
+                                    </td>
+                                    <td x-text="p.notes" style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></td>
+                                    <td class="has-text-right has-text-weight-bold" :class="p.amount < 0 ? 'has-text-danger' : p.amount > 0 ? 'has-text-success' : ''" x-text="formatCents(p.amount)"></td>
+                                </tr>
+                            </template>
+                        <tr x-show="allPayments.length === 0">
+                            <td colspan="5" class="has-text-centered has-text-grey py-4">
+                                <i class="fas fa-inbox fa-2x mb-2" style="display: block;"></i>
+                                No payments yet
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                </div>
+                <div class="px-3 py-3 is-flex is-justify-content-space-between is-align-items-center" x-show="totalPages > 1" style="border-top: 1px solid var(--bulma-border);">
+                    <div class="field has-addons">
+                        <p class="control">
+                            <button class="button is-small" :disabled="page === 1" @click="page--">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                        </p>
+                        <p class="control">
+                            <button class="button is-small" :disabled="page === totalPages" @click="page++">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </p>
+                    </div>
+                    <span class="has-text-grey is-size-7" x-text="'Page ' + page + ' of ' + totalPages"></span>
+                </div>
+            </div>
+
+            <!-- Assign Payee Modal -->
+            <div class="modal" :class="{'is-active': assignOpen}">
+                <div class="modal-background" @click="assignOpen = false"></div>
+                <div class="modal-card">
+                    <header class="modal-card-head">
+                        <p class="modal-card-title"><i class="fas fa-user-tag mr-2"></i> Assign Payee</p>
+                        <button class="delete" @click="assignOpen = false"></button>
+                    </header>
+                    <section class="modal-card-body">
+                        <div class="tabs is-boxed is-medium mb-4">
+                            <ul>
+                                <li :class="{'is-active': assignTab === 'link'}">
+                                    <a @click.prevent="assignTab = 'link'"><i class="fas fa-link mr-1"></i> Link to User</a>
+                                </li>
+                                <li :class="{'is-active': assignTab === 'create'}">
+                                    <a @click.prevent="assignTab = 'create'"><i class="fas fa-plus mr-1"></i> New User</a>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div x-show="assignTab === 'link'">
+                            <p class="mb-3 has-text-grey" x-text="'Select a user to link to payee: ' + assignPayeeName"></p>
+                            <template x-if="usersWithoutPayee.length === 0">
+                                <div class="notification is-warning is-light">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i> All users already have a payee assigned.
+                                </div>
+                            </template>
+                            <template x-for="u in usersWithoutPayee" :key="u.id">
+                                <div class="box is-shadowless p-3 mb-2" style="border: 1px solid var(--bulma-border); border-radius: 8px; cursor: pointer;" @click="linkUser(u.id)">
+                                    <div class="is-flex is-justify-content-space-between is-align-items-center">
+                                        <span class="has-text-weight-medium" x-text="u.name"></span>
+                                        <span class="tag" :class="aidClassColor(u.aid_class)" x-text="aidClassLabel(u.aid_class)"></span>
+                                    </div>
+                                    <p class="is-size-7 has-text-grey mt-1" x-text="u.oidc_sub"></p>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div x-show="assignTab === 'create'">
+                            <form method="POST" action="/admin/users" id="createUserForm">
+                                <input type="hidden" name="actual_payee_id" :value="assignPayeeId">
+                                <div class="field">
+                                    <label class="label">Name</label>
+                                    <div class="control has-icons-left">
+                                        <input class="input" type="text" name="name" placeholder="e.g. John Doe" required>
+                                        <span class="icon is-left is-small"><i class="fas fa-user"></i></span>
+                                    </div>
+                                </div>
+                                <div class="field">
+                                    <label class="label">OIDC Subject (sub)</label>
+                                    <div class="control has-icons-left">
+                                        <input class="input" type="text" name="oidc_sub" placeholder="Unique identifier from Authelia" required>
+                                        <span class="icon is-left is-small"><i class="fas fa-id-badge"></i></span>
+                                    </div>
+                                </div>
+                                <div class="field">
+                                    <label class="label">Aid Class</label>
+                                    <div class="control has-icons-left">
+                                        <div class="select is-fullwidth">
+                                            <select name="aid_class">
+                                                <option value="regular">Regular</option>
+                                                <option value="needs_help">Needs Help</option>
+                                                <option value="will_help">Will Help</option>
+                                            </select>
+                                        </div>
+                                        <span class="icon is-left is-small"><i class="fas fa-hands-helping"></i></span>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+                    <footer class="modal-card-foot">
+                        <template x-if="assignTab === 'create'">
+                            <button type="submit" form="createUserForm" class="button is-success">
+                                <i class="fas fa-check mr-1"></i> Create & Assign
+                            </button>
+                        </template>
+                        <button class="button" @click="assignOpen = false">Cancel</button>
+                    </footer>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" x-data="splitCalculator()">
+            <header class="card-header">
+                <p class="card-header-title">
+                    <i class="fas fa-receipt mr-2"></i> Recent Expenses <span class="tag is-info is-light ml-2">{{ .SplitTag }}</span>
+                </p>
+                <div class="card-header-icon" style="flex: 1; justify-content: flex-end;">
+                    <input class="input is-small" type="text" x-model="txSearch" placeholder="Search expenses..." style="max-width: 240px;">
+                </div>
+            </header>
+            <div class="card-content p-0" x-show="!activeTx">
+                <div style="overflow-x: auto;">
+                <table class="table is-fullwidth is-hoverable" style="white-space: nowrap;">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Payee</th>
+                            <th>Note</th>
+                            <th class="has-text-right">Total</th>
+                            <th class="has-text-centered">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="t in paginatedTransactions" :key="t.id">
+                            <tr>
+                                <td class="has-text-grey" x-text="formatDate(t.date)"></td>
+                                <td x-text="payeeName(t.payee)"></td>
+                                <td x-text="t.notes" style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></td>
+                                <td class="has-text-right has-text-weight-bold" :class="t.amount < 0 ? 'has-text-danger' : t.amount > 0 ? 'has-text-success' : ''" x-text="formatCents(t.amount)"></td>
+                                <td class="has-text-centered">
+                                    <template x-if="hasSplits(t.id)">
+                                        <button class="button is-small is-warning" @click="startSplit(t.id, t.amount, t.notes)">
+                                            <i class="fas fa-pencil mr-1"></i> Edit
+                                        </button>
+                                    </template>
+                                    <template x-if="!hasSplits(t.id)">
+                                        <button class="button is-small is-info" @click="startSplit(t.id, t.amount, t.notes)">
+                                            <i class="fas fa-code-fork mr-1"></i> Split
+                                        </button>
+                                    </template>
+                                </td>
+                            </tr>
+                        </template>
+                        <tr x-show="allTransactions.length === 0">
+                            <td colspan="5" class="has-text-centered has-text-grey py-4">
+                                <i class="fas fa-receipt fa-2x mb-2" style="display: block;"></i>
+                                No tagged expenses yet
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                </div>
+                <div class="px-3 py-3 is-flex is-justify-content-space-between is-align-items-center" x-show="totalTxPages > 1" style="border-top: 1px solid #dbdbdb;">
+                    <div class="field has-addons">
+                        <p class="control">
+                            <button class="button is-small" :disabled="txPage === 1" @click="txPage--">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                        </p>
+                        <p class="control">
+                            <button class="button is-small" :disabled="txPage === totalTxPages" @click="txPage++">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </p>
+                    </div>
+                    <span class="has-text-grey is-size-7" x-text="'Page ' + txPage + ' of ' + totalTxPages"></span>
+                </div>
+            </div>
+            
+            <!-- Split Form -->
+            <div x-show="activeTx" class="card-content" style="display: none;">
+                <div class="is-flex is-justify-content-space-between is-align-items-center mb-4">
+                    <h3 class="title is-5 mb-0">
+                        <i class="fas fa-arrows-split-up-and-left mr-2"></i> Splitting: <strong x-text="activeTxNote"></strong>
+                    </h3>
+                    <button class="button is-small" @click="activeTx = null">
+                        <i class="fas fa-times mr-1"></i> Cancel
+                    </button>
+                </div>
+                
+                <div class="notification is-info is-light py-3 mb-4">
+                    <p class="is-size-5 has-text-weight-bold">
+                        Total: <span x-text="formatCurrency(totalAmount)"></span>
+                    </p>
+                </div>
+                
+                <div class="field is-grouped mb-5">
+                    <p class="control">
+                        <button class="button is-primary is-outlined is-small" @click="calculateEvenly()">
+                            <i class="fas fa-equals mr-1"></i> Evenly (Standard)
+                        </button>
+                    </p>
+                    <p class="control">
+                        <button class="button is-link is-outlined is-small" @click="calculateEvenlyWithAid()">
+                            <i class="fas fa-hand-holding-heart mr-1"></i> Evenly w/ Aid
+                        </button>
+                    </p>
+                </div>
+
+                <div class="mb-4">
+                    <div class="field">
+                        <div class="control" style="position: relative;">
+                            <input class="input" type="text" x-model="addSearch"
+                                   @input="addSearchOpen = true; addHighlightedIndex = -1"
+                                   @click.away="addSearchOpen = false"
+                                   @keydown.escape="addSearchOpen = false"
+                                   @keydown.down.prevent="addHighlightedIndex = Math.min(addHighlightedIndex + 1, filteredAddable.length - 1)"
+                                   @keydown.up.prevent="addHighlightedIndex = Math.max(addHighlightedIndex - 1, 0)"
+                                   @keydown.enter.prevent="addHighlightedIndex >= 0 && filteredAddable[addHighlightedIndex] && (addParticipant(filteredAddable[addHighlightedIndex]), addSearch = '', addSearchOpen = false)"
+                                   placeholder="Add participant by name...">
+                            <div class="dropdown" :class="{'is-active': addSearchOpen && filteredAddable.length > 0}"
+                                 style="width: 100%; position: absolute; top: 100%; left: 0; z-index: 30;">
+                                <div class="dropdown-content" style="max-height: 200px; overflow-y: auto;">
+                                    <template x-for="(u, i) in filteredAddable" :key="u.id">
+                                        <a class="dropdown-item" :class="{'is-active': i === addHighlightedIndex}" @click="addParticipant(u); addSearch = ''; addSearchOpen = false" @mouseenter="addHighlightedIndex = i">
+                                            <span x-text="u.name"></span>
+                                            <span class="tag is-small ml-1"
+                                                  :class="{'is-danger': u.aid_class === 'needs_help', 'is-success': u.aid_class === 'will_help', 'is-light has-text-grey-dark': u.aid_class === 'regular'}"
+                                                  x-text="aidClassLabel(u.aid_class)"></span>
+                                        </a>
+                                    </template>
+                                    <a class="dropdown-item has-text-grey" x-show="addSearch && filteredAddable.length === 0">
+                                        No matching users
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <a class="is-size-7 has-text-link" @click="showImportModal = true; $event.preventDefault()" href="#">
+                            <i class="fas fa-download mr-1"></i> Bulk Import
+                        </a>
+                    </div>
+                </div>
+
+                <form action="/admin/splits" method="POST" @submit="beforeSubmit">
+                    <input type="hidden" name="actual_transaction_id" :value="activeTx">
+                    
+                    <div x-show="participants.length === 0" class="mb-4">
+                        <p class="has-text-grey has-text-centered py-4">
+                            <i class="fas fa-users fa-2x mb-3" style="display: block;"></i>
+                            No participants yet. Search for a user above or
+                            <a class="has-text-link" @click="showImportModal = true; $event.preventDefault()" href="#">import a list</a>.
+                        </p>
+                    </div>
+
+                    <div class="mb-3 is-flex is-justify-content-space-between is-align-items-center" x-show="participants.length > 0">
+                        <span class="has-text-grey is-size-7">
+                            <span x-text="participants.length"></span> participant<span x-show="participants.length !== 1">s</span>
+                        </span>
+                        <span class="has-text-grey is-size-7">
+                            <i class="fas fa-dollar-sign mr-1"></i>
+                            Allocated: <span x-text="formatCurrency(allocated())"></span> / <span x-text="formatCurrency(totalAmount)"></span>
+                        </span>
+                    </div>
+
+                    <div style="max-height: 360px; overflow-y: auto;" x-show="participants.length > 0">
+                        <template x-for="(p, idx) in participants" :key="p.id">
+                            <div class="box is-shadowless p-3 mb-2" style="border: 1px solid #dbdbdb; border-radius: 8px;">
+                                <div class="is-flex is-justify-content-space-between is-align-items-center">
+                                    <div class="is-flex is-align-items-center" style="flex: 1; min-width: 0;">
+                                        <span class="tag is-small mr-2 has-background-grey-lighter" x-text="idx + 1"></span>
+                                        <span class="has-text-weight-medium has-text-overflow-ellipsis" x-text="p.name" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+                                        <span class="tag is-small ml-2"
+                                              :class="{'is-danger': p.aid_class === 'needs_help', 'is-success': p.aid_class === 'will_help', 'is-light has-text-grey-dark': p.aid_class === 'regular'}"
+                                              x-text="aidClassLabel(p.aid_class)"></span>
+                                    </div>
+                                    <div class="is-flex is-align-items-is-flex-end">
+                                        <div class="control has-icons-left mr-2" style="width: 130px;">
+                                            <input class="input is-small" type="number" step="0.01"
+                                                   x-model="splitDollars[p.id]"
+                                                   placeholder="0.00">
+                                            <span class="icon is-left is-small"><i class="fas fa-dollar-sign"></i></span>
+                                        </div>
+                                        <button class="button is-small is-danger is-light" @click="removeParticipant(p.id)" title="Remove">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="notification is-warning is-light mt-4" x-show="getRemaining() !== 0">
+                        <i class="fas fa-exclamation-triangle mr-1"></i> Remaining: <strong x-text="formatCurrency(getRemaining())"></strong>
+                    </div>
+
+                    <div class="field is-grouped mt-5">
+                        <p class="control">
+                            <button type="submit" class="button is-success" :disabled="getRemaining() !== 0 || participants.length === 0">
+                                <i class="fas fa-check mr-1"></i> Save Splits
+                            </button>
+                        </p>
+                        <p class="control">
+                            <button type="button" class="button is-light" @click="activeTx = null">Cancel</button>
+                        </p>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Import Modal -->
+            <div class="modal" :class="{'is-active': showImportModal}">
+                <div class="modal-background" @click="showImportModal = false"></div>
+                <div class="modal-card">
+                    <header class="modal-card-head">
+                        <p class="modal-card-title"><i class="fas fa-upload mr-2"></i> Import Participants</p>
+                        <button class="delete" @click="showImportModal = false"></button>
+                    </header>
+                    <section class="modal-card-body">
+                        <p class="mb-3">Paste participant names below (one per line, or comma-separated):</p>
+                        <textarea class="textarea" x-model="importText" rows="8" placeholder="Alice&#10;Bob&#10;Charlie"></textarea>
+                        
+                        <div x-show="importResults" class="mt-4">
+                            <div class="notification is-success is-light py-3" x-show="importResults.found.length > 0">
+                                <i class="fas fa-check-circle mr-1"></i> Found: <strong x-text="importResults.found.length"></strong> match(es)
+                            </div>
+                            <div class="notification is-warning is-light py-3" x-show="importResults.skipped.length > 0">
+                                <i class="fas fa-exclamation-triangle mr-1"></i> Skipped (not found): <span x-text="importResults.skipped.join(', ')"></span>
+                            </div>
+                        </div>
+                    </section>
+                    <footer class="modal-card-foot">
+                        <button class="button is-info" @click="previewImport()">
+                            <i class="fas fa-eye mr-1"></i> Preview
+                        </button>
+                        <button class="button is-success" @click="confirmImport()"
+                                :disabled="!importResults || importResults.found.length === 0">
+                            <i class="fas fa-check mr-1"></i> Add <span x-text="importResults ? importResults.found.length : 0"></span>
+                        </button>
+                        <button class="button" @click="showImportModal = false">Cancel</button>
+                    </footer>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card { border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); border: 1px solid var(--bulma-border); }
+.card-header { border-radius: 12px 12px 0 0; border-bottom: 1px solid var(--bulma-border); background: var(--bulma-scheme-main-bis); }
+.card-header-title { font-weight: 600; }
+</style>
+
+<script>
+const allUsers = {{ .UsersJSON }};
+const allPayees = {{ .PayeesJSON }};
+const allSplits = {{ .SplitsJSON }};
+const allTransactions = {{ .TransactionsJSON }};
+const allPayments = {{ .PaymentsJSON }};
+
+function adminDashboard() {
+    return {
+        editModalOpen: false,
+        editingUser: { id: '', name: '', oidcSub: '', aidClass: '', payeeId: '' },
+        editPayeeSearch: '',
+        editPayeeOpen: false,
+        editPayeeHighlightedIndex: -1,
+        editSelectedPayeeId: '',
+        editSelectedPayeeName: '',
+        userPage: 1,
+        userPerPage: 10,
+        userSearch: '',
+
+        get editFilteredPayees() {
+            if (this.editPayeeSearch === '') return allPayees.slice(0, 50);
+            const q = this.editPayeeSearch.toLowerCase();
+            return allPayees.filter(p => p.name && p.name.toLowerCase().includes(q)).slice(0, 50);
+        },
+
+        editSelectPayee(p) {
+            this.editSelectedPayeeId = p.id;
+            this.editSelectedPayeeName = p.name;
+            this.editPayeeSearch = p.name;
+            this.editPayeeOpen = false;
+        },
+
+        get filteredUsers() {
+            if (!this.userSearch) return allUsers;
+            const q = this.userSearch.toLowerCase();
+            return allUsers.filter(u => u.name && u.name.toLowerCase().includes(q));
+        },
+
+        get paginatedUsers() {
+            const start = (this.userPage - 1) * this.userPerPage;
+            return this.filteredUsers.slice(start, start + this.userPerPage);
+        },
+
+        get totalUserPages() {
+            return Math.ceil(this.filteredUsers.length / this.userPerPage);
+        },
+
+        openEditModal(id, name, oidcSub, aidClass, payeeId) {
+            this.editingUser = { id, name, oidcSub, aidClass, payeeId };
+            const found = allPayees.find(p => p.id === payeeId);
+            this.editPayeeSearch = found ? found.name : '';
+            this.editSelectedPayeeId = payeeId;
+            this.editSelectedPayeeName = found ? found.name : '';
+            this.editModalOpen = true;
+        },
+
+        aidClassColor(cls) {
+            if (cls === 'needs_help') return 'is-danger';
+            if (cls === 'will_help') return 'is-success';
+            return 'is-light has-text-grey-dark';
+        },
+
+        aidClassLabel(cls) {
+            if (cls === 'needs_help') return 'Needs Help';
+            if (cls === 'will_help') return 'Will Help';
+            return 'Regular';
+        },
+
+        formatCents(cents) {
+            if (cents < 0) return '-$' + (Math.abs(cents) / 100).toFixed(2);
+            return '$' + (cents / 100).toFixed(2);
+        },
+        payeeName(payeeId) {
+            if (!payeeId) return '';
+            const p = allPayees.find(p => p.id === payeeId);
+            return p ? p.name : payeeId;
+        },
+    }
+}
+
+function paymentsTable() {
+    return {
+        payments: allPayments,
+        search: '',
+        page: 1,
+        perPage: 15,
+        assignOpen: false,
+        assignTab: 'link',
+        assignPayeeId: '',
+        assignPayeeName: '',
+
+        get filteredPayments() {
+            if (!this.search) return this.payments;
+            const q = this.search.toLowerCase();
+            return this.payments.filter(p => {
+                return this.payeeName(p.payee).toLowerCase().includes(q)
+                    || (p.notes && p.notes.toLowerCase().includes(q))
+                    || (p.has_mapped_user && p.mapped_user_name.toLowerCase().includes(q))
+                    || this.formatDate(p.date).toLowerCase().includes(q)
+                    || this.formatCents(p.amount).includes(q);
+            });
+        },
+
+        get paginatedPayments() {
+            const start = (this.page - 1) * this.perPage;
+            return this.filteredPayments.slice(start, start + this.perPage);
+        },
+
+        get totalPages() {
+            return Math.ceil(this.filteredPayments.length / this.perPage);
+        },
+
+        get usersWithoutPayee() {
+            return allUsers.filter(u => !u.actual_payee_id);
+        },
+
+        openAssign(payeeId, txId) {
+            this.assignPayeeId = payeeId;
+            const found = allPayees.find(p => p.id === payeeId);
+            this.assignPayeeName = found ? found.name : payeeId;
+            this.assignTab = 'link';
+            this.assignOpen = true;
+        },
+
+        linkUser(userId) {
+            const user = allUsers.find(u => u.id === userId);
+            if (!user) return;
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/admin/users/update';
+            const fields = {
+                id: userId,
+                name: user.name,
+                oidc_sub: user.oidc_sub,
+                aid_class: user.aid_class,
+                actual_payee_id: this.assignPayeeId
+            };
+            for (const [name, value] of Object.entries(fields)) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = name;
+                input.value = value;
+                form.appendChild(input);
+            }
+            document.body.appendChild(form);
+            form.submit();
+        },
+
+        aidClassColor(cls) {
+            if (cls === 'needs_help') return 'is-danger';
+            if (cls === 'will_help') return 'is-success';
+            return 'is-light has-text-grey-dark';
+        },
+
+        aidClassLabel(cls) {
+            if (cls === 'needs_help') return 'Needs Help';
+            if (cls === 'will_help') return 'Will Help';
+            return 'Regular';
+        },
+
+        payeeName(payeeId) {
+            const p = allPayees.find(p => p.id === payeeId);
+            return p ? p.name : payeeId;
+        },
+
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            const parts = dateStr.split('-');
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return months[parseInt(parts[1]) - 1] + ' ' + parseInt(parts[2]) + ', ' + parts[0];
+        },
+
+        formatCents(cents) {
+            if (cents < 0) return '-$' + (Math.abs(cents) / 100).toFixed(2);
+            return '$' + (cents / 100).toFixed(2);
+        },
+    }
+}
+
+function payeeSearch(initialId = '') {
+    let initialName = '';
+    if (initialId !== '') {
+        const found = allPayees.find(p => p.id === initialId);
+        if (found) initialName = found.name;
+    }
+
+    return {
+        payees: allPayees,
+        search: initialName,
+        open: false,
+        highlightedIndex: -1,
+        selectedPayeeId: initialId,
+        selectedPayeeName: initialName,
+
+        get filteredPayees() {
+            if (this.search === '') return this.payees.slice(0, 50);
+            const lowerSearch = this.search.toLowerCase();
+            return this.payees.filter(p => p.name && p.name.toLowerCase().includes(lowerSearch)).slice(0, 50);
+        },
+
+        selectPayee(p) {
+            this.selectedPayeeId = p.id;
+            this.selectedPayeeName = p.name;
+            this.search = p.name;
+            this.open = false;
+        }
+    }
+}
+
+function splitCalculator() {
+    return {
+        users: allUsers,
+        transactions: allTransactions,
+        activeTx: null,
+        activeTxNote: '',
+        totalAmount: 0,
+        participants: [],
+        splits: {},
+        splitDollars: {},
+
+        addSearch: '',
+        addSearchOpen: false,
+        addHighlightedIndex: -1,
+        showImportModal: false,
+        importText: '',
+        importResults: null,
+
+        txPage: 1,
+        txPerPage: 15,
+        txSearch: '',
+
+        get filteredTransactions() {
+            if (!this.txSearch) return this.transactions;
+            const q = this.txSearch.toLowerCase();
+            return this.transactions.filter(t => {
+                const payeeName = this.payeeName(t.payee).toLowerCase();
+                return payeeName.includes(q)
+                    || (t.notes && t.notes.toLowerCase().includes(q))
+                    || this.formatDate(t.date).toLowerCase().includes(q)
+                    || this.formatCents(t.amount).includes(q);
+            });
+        },
+
+        get paginatedTransactions() {
+            const start = (this.txPage - 1) * this.txPerPage;
+            return this.filteredTransactions.slice(start, start + this.txPerPage);
+        },
+
+        get totalTxPages() {
+            return Math.ceil(this.filteredTransactions.length / this.txPerPage);
+        },
+
+        payeeName(payeeId) {
+            const p = allPayees.find(p => p.id === payeeId);
+            return p ? p.name : payeeId;
+        },
+
+        hasSplits(txId) {
+            return allSplits.some(s => s.actual_transaction_id === txId);
+        },
+
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            const parts = dateStr.split('-');
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return months[parseInt(parts[1]) - 1] + ' ' + parseInt(parts[2]) + ', ' + parts[0];
+        },
+
+        formatCents(cents) {
+            if (cents < 0) return '-$' + (Math.abs(cents) / 100).toFixed(2);
+            return '$' + (cents / 100).toFixed(2);
+        },
+
+        get filteredAddable() {
+            if (this.addSearch === '') return [];
+            const lower = this.addSearch.toLowerCase();
+            const ids = new Set(this.participants.map(p => p.id));
+            return this.users
+                .filter(u => u.name && u.name.toLowerCase().includes(lower) && !ids.has(u.id))
+                .slice(0, 20);
+        },
+
+        aidClassLabel(cls) {
+            if (cls === 'needs_help') return 'Needs Help';
+            if (cls === 'will_help') return 'Will Help';
+            return 'Regular';
+        },
+
+        addParticipant(user) {
+            if (this.participants.find(p => p.id === user.id)) return;
+            this.participants.push({ id: user.id, name: user.name, aid_class: user.aid_class });
+            if (!(user.id in this.splits)) {
+                this.splits[user.id] = 0;
+                this.splitDollars[user.id] = 0;
+            }
+        },
+
+        removeParticipant(userId) {
+            this.participants = this.participants.filter(p => p.id !== userId);
+            this.splits[userId] = 0;
+            this.splitDollars[userId] = 0;
+        },
+        
+        startSplit(txId, amount, note) {
+            this.activeTx = txId;
+            this.activeTxNote = note;
+            this.totalAmount = Math.abs(amount);
+            this.participants = [];
+            this.splits = {};
+            this.splitDollars = {};
+            this.importResults = null;
+            this.importText = '';
+
+            const existingSplits = allSplits.filter(s => s.actual_transaction_id === txId);
+            if (existingSplits.length > 0) {
+                existingSplits.forEach(s => {
+                    if (s.amount_owed <= 0) return;
+                    const user = this.users.find(u => u.id === s.user_id);
+                    if (user) {
+                        this.participants.push({ id: user.id, name: user.name, aid_class: user.aid_class });
+                        this.splits[user.id] = s.amount_owed;
+                        this.splitDollars[user.id] = (s.amount_owed / 100).toFixed(2);
+                    }
+                });
+            }
+        },
+
+        getRemaining() {
+            let allocated = 0;
+            for (const p of this.participants) {
+                const dollars = parseFloat(this.splitDollars[p.id] || 0);
+                allocated += Math.round(dollars * 100);
+            }
+            return this.totalAmount - allocated;
+        },
+
+        allocated() {
+            let total = 0;
+            for (const p of this.participants) {
+                const dollars = parseFloat(this.splitDollars[p.id] || 0);
+                total += Math.round(dollars * 100);
+            }
+            return total;
+        },
+
+        formatCurrency(cents) {
+            const abs = Math.abs(cents);
+            const formatted = "$" + (abs / 100).toFixed(2);
+            return cents < 0 ? "-" + formatted : formatted;
+        },
+        
+        beforeSubmit(e) {
+            for (const p of this.participants) {
+                const dollars = parseFloat(this.splitDollars[p.id]) || 0;
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'split_amount_' + p.id;
+                input.value = Math.round(dollars * 100);
+                e.target.appendChild(input);
+            }
+        },
+        
+        calculateEvenly() {
+            if (this.participants.length === 0) return;
+            const count = this.participants.length;
+            const baseAmount = Math.floor(this.totalAmount / count);
+            let remainder = this.totalAmount % count;
+
+            this.participants.forEach(p => {
+                this.splits[p.id] = baseAmount;
+                this.splitDollars[p.id] = (baseAmount / 100).toFixed(2);
+                if (remainder > 0) {
+                    this.splits[p.id] += 1;
+                    this.splitDollars[p.id] = (this.splits[p.id] / 100).toFixed(2);
+                    remainder--;
+                }
+            });
+        },
+
+        calculateEvenlyWithAid() {
+            if (this.participants.length === 0) return;
+
+            const involved = this.participants;
+            const count = involved.length;
+            const baseAmount = Math.floor(this.totalAmount / count);
+
+            let needsHelpCount = 0;
+            let willHelpCount = 0;
+            let regularCount = 0;
+
+            involved.forEach(p => {
+                if (p.aid_class === 'needs_help') needsHelpCount++;
+                else if (p.aid_class === 'will_help') willHelpCount++;
+                else regularCount++;
+            });
+
+            if (willHelpCount === 0 || needsHelpCount === 0) {
+                return this.calculateEvenly();
+            }
+
+            const totalShortfall = (baseAmount * needsHelpCount) + (this.totalAmount % count);
+            const extraPerWillHelp = Math.floor(totalShortfall / willHelpCount);
+            let remainder = totalShortfall % willHelpCount;
+
+            involved.forEach(p => {
+                if (p.aid_class === 'needs_help') {
+                    this.splits[p.id] = 0;
+                    this.splitDollars[p.id] = 0;
+                } else if (p.aid_class === 'regular') {
+                    this.splits[p.id] = baseAmount;
+                    this.splitDollars[p.id] = (baseAmount / 100).toFixed(2);
+                } else if (p.aid_class === 'will_help') {
+                    let amount = baseAmount + extraPerWillHelp;
+                    if (remainder > 0) {
+                        amount += 1;
+                        remainder--;
+                    }
+                    this.splits[p.id] = amount;
+                    this.splitDollars[p.id] = (amount / 100).toFixed(2);
+                }
+            });
+        },
+
+        previewImport() {
+            const names = this.importText
+                .split(/[\n,]+/)
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+
+            const found = [];
+            const skipped = [];
+            const existingIds = new Set(this.participants.map(p => p.id));
+
+            names.forEach(name => {
+                const lower = name.toLowerCase();
+                const match = this.users.find(u => u.name && u.name.toLowerCase() === lower && !existingIds.has(u.id));
+                if (match) {
+                    found.push(match);
+                } else {
+                    skipped.push(name);
+                }
+            });
+
+            this.importResults = { found, skipped };
+        },
+
+        confirmImport() {
+            if (!this.importResults) return;
+            this.importResults.found.forEach(u => {
+                this.participants.push({ id: u.id, name: u.name, aid_class: u.aid_class });
+                if (!(u.id in this.splits)) {
+                    this.splits[u.id] = 0;
+                    this.splitDollars[u.id] = 0;
+                }
+            });
+            this.showImportModal = false;
+            this.importText = '';
+            this.importResults = null;
+        }
+    }
+}
+</script>
+{{ end }}

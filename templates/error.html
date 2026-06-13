@@ -1,0 +1,22 @@
+{{ define "content" }}
+<div class="hero is-medium">
+  <div class="hero-body has-text-centered">
+    <div class="container" style="max-width: 500px;">
+      <div class="mb-5">
+        <span class="icon is-large has-text-danger">
+          <i class="fas fa-exclamation-triangle fa-3x"></i>
+        </span>
+      </div>
+      <p class="title is-size-1 has-text-weight-bold has-text-grey-dark">{{ .Code }}</p>
+      <p class="subtitle is-size-5 has-text-grey mt-3">
+        {{ .Message }}
+      </p>
+      <div class="mt-5">
+        <a class="button is-dark" href="/">
+          <i class="fas fa-arrow-left mr-1"></i> Go Home
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{{ end }}

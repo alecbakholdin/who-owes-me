@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Who Owes Me</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.0/css/bulma.min.css">
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.0/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script>
+        (function() {
+            var theme = localStorage.getItem('theme');
+            if (!theme) {
+                theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : '';
+            }
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+</head>
+<body>
+    <nav class="navbar is-dark" role="navigation" aria-label="main navigation" style="display: flex; align-items: center; min-height: 3.25rem;">
+        <div class="navbar-brand">
+            <a class="navbar-item has-text-weight-bold is-size-5" href="/">
+                <i class="fas fa-calculator mr-2"></i> Who Owes Me
+            </a>
+        </div>
+        <div style="margin-left: auto; display: flex; align-items: center;">
+            <a class="navbar-item has-text-grey-lighter" href="#" id="themeToggle" style="cursor: pointer;">
+                <i class="fas fa-moon" id="themeIcon"></i>
+            </a>
+            <a class="navbar-item has-text-grey-lighter" href="/logout">
+                <i class="fas fa-sign-out-alt mr-1"></i> Logout
+            </a>
+        </div>
+    </nav>
+    <section class="section">
+        <div class="container">
+            {{ template "content" . }}
+        </div>
+    </section>
+    <script>
+        (function() {
+            var html = document.documentElement;
+            var icon = document.getElementById('themeIcon');
+            var toggle = document.getElementById('themeToggle');
+
+            function updateIcon(theme) {
+                if (theme === 'dark') {
+                    icon.className = 'fas fa-sun';
+                } else {
+                    icon.className = 'fas fa-moon';
+                }
+            }
+
+            updateIcon(html.getAttribute('data-theme'));
+
+            toggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                var current = html.getAttribute('data-theme');
+                var next = current === 'dark' ? '' : 'dark';
+                html.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+                updateIcon(next);
+            });
+        })();
+    </script>
+</body>
+</html>

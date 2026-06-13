@@ -1,0 +1,56 @@
+version: "3.8"
+
+services:
+  authelia:
+    image: authelia/authelia:4.37.0
+    container_name: who-owes-me-authelia
+    volumes:
+      - ./test-env/authelia:/config
+    ports:
+      - "9091:9091"
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+
+  actual_server:
+    image: actualbudget/actual-server:latest
+    container_name: who-owes-me-actual
+    ports:
+      - "5006:5006"
+    volumes:
+      - ./test-env/actual:/data
+    restart: unless-stopped
+
+  actual_http_api:
+    image: jhonderson/actual-http-api:latest
+    container_name: who-owes-me-actual-api
+    ports:
+      - "5007:5007"
+    volumes:
+      - ./test-env/actual-api-data:/data
+    environment:
+      - ACTUAL_SERVER_URL=http://actual_server:5006
+      - ACTUAL_SERVER_PASSWORD=testpassword
+      - API_KEY=test_api_key
+      - ENABLE_EXPERIMENTAL_OPERATIONS=true
+    depends_on:
+      - actual_server
+    restart: unless-stopped
+
+  who-owes-me:
+    build: .
+    container_name: who-owes-me-app
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./test-env/data:/app/data
+    env_file:
+      - .env.test
+    environment:
+      - DB_PATH=/app/data/data.db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    depends_on:
+      - authelia
+      - actual_http_api
