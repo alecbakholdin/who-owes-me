@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
+	"who-owes-me/internal/envutil"
 )
 
 var (
@@ -18,17 +18,17 @@ var (
 )
 
 func InitOIDC() error {
-	issuerURL := os.Getenv("OIDC_ISSUER_URL")
-	clientID := os.Getenv("OIDC_CLIENT_ID")
-	clientSecret := os.Getenv("OIDC_CLIENT_SECRET")
-	redirectURL := os.Getenv("OIDC_REDIRECT_URL")
+	issuerURL := envutil.Getenv("OIDC_ISSUER_URL")
+	clientID := envutil.Getenv("OIDC_CLIENT_ID")
+	clientSecret := envutil.Getenv("OIDC_CLIENT_SECRET")
+	redirectURL := envutil.Getenv("OIDC_REDIRECT_URL")
 
 	if issuerURL == "" || clientID == "" {
 		return fmt.Errorf("OIDC configuration is missing")
 	}
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	if os.Getenv("DOCKER_ENV") == "true" {
+	if envutil.Getenv("DOCKER_ENV") == "true" {
 		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 			if addr == "localhost:9091" {
 				addr = "authelia:9091"
@@ -69,7 +69,7 @@ func SetCookie(w http.ResponseWriter, name, value string) {
 		Value:    value,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   os.Getenv("APP_ENV") == "production",
+		Secure:   envutil.Getenv("APP_ENV") == "production",
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -81,7 +81,7 @@ func ClearCookie(w http.ResponseWriter, name string) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   os.Getenv("APP_ENV") == "production",
+		Secure:   envutil.Getenv("APP_ENV") == "production",
 		SameSite: http.SameSiteLaxMode,
 	})
 }

@@ -4,16 +4,16 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
 
 	_ "github.com/mattn/go-sqlite3"
+	"who-owes-me/internal/envutil"
 )
 
 var DB *sql.DB
 
 func InitDB() {
 	var err error
-	dbPath := os.Getenv("DB_PATH")
+	dbPath := envutil.Getenv("DB_PATH")
 	if dbPath == "" {
 		dbPath = "data.db"
 	}

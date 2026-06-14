@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,10 +13,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"who-owes-me/db"
+	"who-owes-me/internal/envutil"
 )
 
 var splitTag = func() string {
-	if tag := os.Getenv("SPLIT_TAG"); tag != "" {
+	if tag := envutil.Getenv("SPLIT_TAG"); tag != "" {
 		return tag
 	}
 	return "#gsu2026"

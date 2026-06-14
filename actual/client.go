@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
+
+	"who-owes-me/internal/envutil"
 )
 
 type Client struct {
@@ -18,9 +19,9 @@ type Client struct {
 
 func NewClient() *Client {
 	return &Client{
-		BaseURL:  os.Getenv("ACTUAL_SERVER_URL"),
-		APIKey:   os.Getenv("ACTUAL_API_KEY"),
-		BudgetID: os.Getenv("ACTUAL_BUDGET_ID"),
+		BaseURL:  envutil.Getenv("ACTUAL_SERVER_URL"),
+		APIKey:   envutil.Getenv("ACTUAL_API_KEY"),
+		BudgetID: envutil.Getenv("ACTUAL_BUDGET_ID"),
 		HTTP:     &http.Client{},
 	}
 }

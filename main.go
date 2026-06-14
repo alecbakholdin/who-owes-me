@@ -3,11 +3,11 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
 
 	"who-owes-me/auth"
 	"who-owes-me/db"
 	"who-owes-me/handlers"
+	"who-owes-me/internal/envutil"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -30,7 +30,7 @@ func main() {
 
 	handlers.RegisterRoutes(r)
 
-	port := os.Getenv("PORT")
+	port := envutil.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}

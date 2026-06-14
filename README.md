@@ -61,9 +61,93 @@ docker-compose -f docker-compose.test.yml up -d
 
 ## 🚀 Production Deployment
 
-1. Copy `.env.example` to `.env` and fill it out with your production Authelia and Actual Budget details.
-2. Ensure you have created the `who-owes-me` OIDC client in your production Authelia `configuration.yml`.
-3. Use the primary Docker Compose file to run the app:
-   ```bash
-   docker-compose up -d
-   ```
+### 1. Configure Environment
+
+Copy `.env.example` to `.env` in the project root and fill in your production Authelia and Actual Budget details:
+
+```env
+PORT=8080
+DB_PATH=data.db
+APP_ENV=development
+
+# OIDC (Authelia) Configuration
+OIDC_ISSUER_URL=https://auth.yourdomain.com
+OIDC_CLIENT_ID=who-owes-me
+OIDC_CLIENT_SECRET=your_client_secret_here
+OIDC_REDIRECT_URL=http://localhost:8080/callback
+
+# Actual Budget Configuration
+ACTUAL_SERVER_URL=https://actual.yourdomain.com
+ACTUAL_API_KEY=your_actual_api_key_here
+ACTUAL_BUDGET_ID=your_budget_file_id_here
+
+SPLIT_TAG=#gsu2026
+```
+
+### 2. Configure Authelia
+
+Ensure you have created the `who-owes-me` OIDC client in your production Authelia `configuration.yml`.
+
+### 3. Run via Docker Compose
+
+**a) From GitHub Container Registry (recommended)**
+
+The CI publishes images to `ghcr.io/<your-repo>/who-owes-me`. To use it, create a `docker-compose.yml`:
+
+```yaml
+services:
+  who-owes-me:
+    image: ghcr.io/your-org/who-owes-me:latest
+    container_name: who-owes-me
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env
+    restart: unless-stopped
+```
+
+> **Authenticating to GHCR**: If the repo is private, authenticate on the host:
+> ```
+> echo $GITHUB_TOKEN | docker login ghcr.io -u your-username --password-stdin
+> ```
+
+**Secrets via `_FILE` env vars (recommended over `.env` for secrets):**
+
+Any env var can be provided via `<NAME>_FILE` pointing to a Docker secret or bind-mounted file. This is the preferred approach for sensitive values:
+
+```yaml
+services:
+  who-owes-me:
+    image: ghcr.io/your-org/who-owes-me:latest
+    container_name: who-owes-me
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - OIDC_ISSUER_URL=https://auth.yourdomain.com
+      - OIDC_CLIENT_ID=who-owes-me
+      - OIDC_CLIENT_SECRET_FILE=/run/secrets/oidc_client_secret
+      - OIDC_REDIRECT_URL=http://localhost:8080/callback
+      - ACTUAL_SERVER_URL=https://actual.yourdomain.com
+      - ACTUAL_API_KEY_FILE=/run/secrets/actual_api_key
+      - ACTUAL_BUDGET_ID=your_budget_file_id
+      - SPLIT_TAG=#gsu2026
+    secrets:
+      - oidc_client_secret
+      - actual_api_key
+    restart: unless-stopped
+
+secrets:
+  oidc_client_secret:
+    file: ./secrets/oidc_client_secret.txt
+  actual_api_key:
+    file: ./secrets/actual_api_key.txt
+```
+
+**b) Build locally**
+
+```bash
+docker compose up -d --build
+```

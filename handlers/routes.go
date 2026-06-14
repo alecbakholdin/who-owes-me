@@ -7,11 +7,10 @@ import (
 	"net"
 	"net/http"
 
-	"os"
-
 	"who-owes-me/auth"
 
 	"who-owes-me/db"
+	"who-owes-me/internal/envutil"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-chi/chi/v5"
@@ -20,7 +19,7 @@ import (
 // Helper for local docker OIDC mapping
 func clientContext(ctx context.Context) context.Context {
 	customTransport := http.DefaultTransport.(*http.Transport).Clone()
-	if os.Getenv("DOCKER_ENV") == "true" {
+	if envutil.Getenv("DOCKER_ENV") == "true" {
 		customTransport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 			if addr == "localhost:9091" {
 				addr = "authelia:9091"

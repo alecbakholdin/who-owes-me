@@ -2,5 +2,5 @@ client.json
 *.env
 .env
 data
-who-owes-me
+./who-owes-me
 tmp
