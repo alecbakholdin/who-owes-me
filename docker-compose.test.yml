@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   authelia:
-    image: authelia/authelia:4.37.0
+    image: authelia/authelia:4.39.19
     container_name: who-owes-me-authelia
     volumes:
       - ./test-env/authelia:/config
