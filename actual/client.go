@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"who-owes-me/internal/envutil"
 )
@@ -22,7 +23,9 @@ func NewClient() *Client {
 		BaseURL:  envutil.Getenv("ACTUAL_SERVER_URL"),
 		APIKey:   envutil.Getenv("ACTUAL_API_KEY"),
 		BudgetID: envutil.Getenv("ACTUAL_BUDGET_ID"),
-		HTTP:     &http.Client{},
+		HTTP: &http.Client{
+			Timeout: 10 * time.Second,
+		},
 	}
 }
 

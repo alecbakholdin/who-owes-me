@@ -31,6 +31,7 @@ func clientContext(ctx context.Context) context.Context {
 }
 
 func RegisterRoutes(r chi.Router) {
+	r.Get("/health", handleHealth)
 	r.Get("/login", handleLogin)
 	r.Get("/callback", handleCallback)
 	r.Get("/logout", handleLogout)

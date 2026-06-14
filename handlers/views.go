@@ -147,6 +147,11 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/users/"+user.OIDCSub, http.StatusFound)
 }
 
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status":"ok"}`))
+}
+
 func handleUserDashboardBySub(w http.ResponseWriter, r *http.Request) {
 	isAdmin := r.Context().Value(isAdminCtxKey).(bool)
 	userVal := r.Context().Value(userCtxKey)
