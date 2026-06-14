@@ -4,4 +4,7 @@ client.json
 who-owes-me
 data
 tmp
-test-env
+test-env/actual
+test-env/actual-api-data
+test-env/data
+test-env/authelia/db.sqlite3

@@ -1,0 +1,13 @@
+users:
+  admin:
+    displayname: "Test Admin"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$bvvxJ9SmdR5WOUzwMTzQiQ$gQXdX2ad0RGjfv7TRIOHJvaHDoqrpyXIeni4KdAbQow"
+    email: admin@example.com
+    groups:
+      - whoowesme_admin
+  user:
+    displayname: "Test User"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$bvvxJ9SmdR5WOUzwMTzQiQ$gQXdX2ad0RGjfv7TRIOHJvaHDoqrpyXIeni4KdAbQow"
+    email: user@example.com
+    groups:
+      - whoowesme_user

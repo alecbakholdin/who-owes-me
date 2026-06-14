@@ -156,7 +156,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		// Check if admin
 		isAdmin := false
 		for _, group := range claims.Groups {
-			if group == "admin" || group == "admins" { // adjust based on authelia config
+			if group == "whoowesme_admin" {
 				isAdmin = true
 				break
 			}
