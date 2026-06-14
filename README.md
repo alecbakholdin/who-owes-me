@@ -84,9 +84,38 @@ ACTUAL_BUDGET_ID=your_budget_file_id_here
 SPLIT_TAG=#gsu2026
 ```
 
-### 2. Configure Authelia
+### 2. Configure Authelia OIDC Client
 
-Ensure you have created the `who-owes-me` OIDC client in your production Authelia `configuration.yml`.
+Add an OIDC client entry under `identity_providers.oidc.clients` in your Authelia `configuration.yml`:
+
+```yaml
+identity_providers:
+  oidc:
+    hmac_secret: your_hmac_secret_at_least_32_chars
+    issuer_private_key: |
+      -----BEGIN PRIVATE KEY-----
+      ...
+      -----END PRIVATE KEY-----
+    clients:
+      - id: who-owes-me
+        description: Who Owes Me App
+        secret: '$plaintext$your_client_secret'
+        public: false
+        authorization_policy: one_factor
+        redirect_uris:
+          - http://localhost:8080/callback
+          # Add https://your-domain.com/callback for production
+        scopes:
+          - openid
+          - profile
+          - email
+          - groups
+```
+
+**Important notes:**
+- `secret` can be `$plaintext$...` for plaintext or `$argon2id$...` for a hashed secret. The plaintext value is what you put in `OIDC_CLIENT_SECRET`.
+- `redirect_uris` must include the exact callback URL(s) your app will use — Authelia will reject mismatches.
+- The `groups` scope is required so Authelia sends group membership claims. Users in the `admin` or `admins` group (depending on your config) will have admin access in Who Owes Me; all others get a read-only user view.
 
 ### 3. Run via Docker Compose
 

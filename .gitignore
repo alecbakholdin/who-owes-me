@@ -1,6 +1,7 @@
 client.json
 *.env
 .env
+who-owes-me
 data
-./who-owes-me
 tmp
+test-env
