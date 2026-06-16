@@ -21,7 +21,7 @@ access_control:
 
 session:
   secret: insecure_session_secret
-  domain: localhost
+  domain: authelia.localhost
 
 storage:
   encryption_key: a_very_long_and_secure_encryption_key_for_testing

@@ -4,31 +4,14 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"net"
 	"net/http"
 
 	"who-owes-me/auth"
-
 	"who-owes-me/db"
-	"who-owes-me/internal/envutil"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/oauth2"
 )
-
-// Helper for local docker OIDC mapping
-func clientContext(ctx context.Context) context.Context {
-	customTransport := http.DefaultTransport.(*http.Transport).Clone()
-	if envutil.Getenv("DOCKER_ENV") == "true" {
-		customTransport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			if addr == "localhost:9091" {
-				addr = "authelia:9091"
-			}
-			return net.Dial(network, addr)
-		}
-	}
-	return oidc.ClientContext(ctx, &http.Client{Transport: customTransport})
-}
 
 func RegisterRoutes(r chi.Router) {
 	r.Get("/health", handleHealth)
@@ -39,10 +22,10 @@ func RegisterRoutes(r chi.Router) {
 	// Protected routes
 	r.Group(func(r chi.Router) {
 		r.Use(AuthMiddleware)
-		
+
 		r.Get("/", handleDashboard)
 		r.Get("/users/{sub}", handleUserDashboardBySub)
-		
+
 		// Admin routes
 		r.Group(func(r chi.Router) {
 			r.Use(AdminMiddleware)
@@ -64,9 +47,9 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	b := make([]byte, 16)
 	rand.Read(b)
 	state := base64.URLEncoding.EncodeToString(b)
-	
+
 	auth.SetCookie(w, "oauth_state", state)
-	
+
 	url := auth.OAuth2Config.AuthCodeURL(state)
 	http.Redirect(w, r, url, http.StatusFound)
 }
@@ -78,7 +61,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := clientContext(r.Context())
+	ctx := auth.GetClientContext(r.Context())
 	oauth2Token, err := auth.OAuth2Config.Exchange(ctx, r.URL.Query().Get("code"))
 	if err != nil {
 		http.Error(w, "Failed to exchange token: "+err.Error(), http.StatusInternalServerError)
@@ -91,30 +74,65 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idToken, err := auth.Verifier.Verify(ctx, rawIDToken)
+	_, err = auth.Verifier.Verify(ctx, rawIDToken)
 	if err != nil {
 		http.Error(w, "Failed to verify ID Token: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	var claims auth.CustomClaims
-	if err := idToken.Claims(&claims); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// Fetch UserInfo to get groups since Authelia 4.39 removes groups from the ID Token by default
+	userInfo, err := auth.Provider.UserInfo(ctx, oauth2.StaticTokenSource(oauth2Token))
+	if err != nil {
+		http.Error(w, "Failed to fetch user info: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	var claims auth.CustomClaims
+	if err := userInfo.Claims(&claims); err != nil {
+		http.Error(w, "Failed to parse user info claims: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	isAdmin := false
+	for _, group := range claims.Groups {
+		if group == "whoowesme_admin" {
+			isAdmin = true
+			break
+		}
+	}
+
+	auth.SetAdminCookie(w, isAdmin)
 	auth.SetCookie(w, "auth_token", rawIDToken)
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 func handleLogout(w http.ResponseWriter, r *http.Request) {
+	idToken, _ := auth.GetCookie(r, "auth_token")
+
 	auth.ClearCookie(w, "auth_token")
+	auth.ClearCookie(w, "is_admin")
+
+	if auth.Provider != nil {
+		var providerClaims struct {
+			EndSessionEndpoint string `json:"end_session_endpoint"`
+		}
+		if err := auth.Provider.Claims(&providerClaims); err == nil && providerClaims.EndSessionEndpoint != "" {
+			redirectURL := providerClaims.EndSessionEndpoint
+			if idToken != "" {
+				redirectURL += "?id_token_hint=" + idToken
+			}
+			http.Redirect(w, r, redirectURL, http.StatusFound)
+			return
+		}
+	}
+
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
 
 // Middleware
 
 type contextKey string
+
 const userCtxKey = contextKey("user")
 const isAdminCtxKey = contextKey("isAdmin")
 
@@ -127,7 +145,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 				db.CreateUser("Dev User", "dev_user", "regular", "dev_payee")
 				user, _ = db.GetUserBySub("dev_user")
 			}
-			
+
 			ctx := context.WithValue(r.Context(), userCtxKey, user)
 			ctx = context.WithValue(ctx, isAdminCtxKey, true)
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -140,26 +158,18 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		authCtx := clientContext(r.Context())
+		authCtx := auth.GetClientContext(r.Context())
 		idToken, err := auth.Verifier.Verify(authCtx, tokenStr)
 		if err != nil {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
 
-		var claims auth.CustomClaims
-		if err := idToken.Claims(&claims); err != nil {
-			http.Error(w, "Invalid claims", http.StatusUnauthorized)
+		isAdmin, err := auth.GetAdminCookie(r)
+		if err != nil {
+			// Invalid or missing cookie (e.g. app restarted), force re-login
+			http.Redirect(w, r, "/login", http.StatusFound)
 			return
-		}
-
-		// Check if admin
-		isAdmin := false
-		for _, group := range claims.Groups {
-			if group == "whoowesme_admin" {
-				isAdmin = true
-				break
-			}
 		}
 
 		// Lookup user in DB

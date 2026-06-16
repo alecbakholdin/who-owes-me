@@ -48,6 +48,7 @@ services:
       - .env.test
     environment:
       - DB_PATH=/app/data/data.db
+      - DOCKER_ENV=true
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
