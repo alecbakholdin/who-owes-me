@@ -243,7 +243,7 @@
                     </tbody>
                 </table>
                     </div>
-                    <div class="px-3 py-3 is-flex is-justify-content-space-between is-align-items-center" x-show="totalUserPages > 1" style="border-top: 1px solid #dbdbdb;">
+                    <div class="px-3 py-3 is-flex is-justify-content-space-between is-align-items-center" x-show="totalUserPages > 1" style="border-top: 1px solid var(--bulma-border);">
                         <div class="field has-addons">
                             <p class="control">
                                 <button class="button is-small" :disabled="userPage === 1" @click="userPage--">
@@ -561,7 +561,7 @@
                     </tbody>
                 </table>
                 </div>
-                <div class="px-3 py-3 is-flex is-justify-content-space-between is-align-items-center" x-show="totalTxPages > 1" style="border-top: 1px solid #dbdbdb;">
+                <div class="px-3 py-3 is-flex is-justify-content-space-between is-align-items-center" x-show="totalTxPages > 1" style="border-top: 1px solid var(--bulma-border);">
                     <div class="field has-addons">
                         <p class="control">
                             <button class="button is-small" :disabled="txPage === 1" @click="txPage--">
@@ -667,7 +667,7 @@
 
                     <div style="max-height: 360px; overflow-y: auto;" x-show="participants.length > 0">
                         <template x-for="(p, idx) in participants" :key="p.id">
-                            <div class="box is-shadowless p-3 mb-2" style="border: 1px solid #dbdbdb; border-radius: 8px;">
+                            <div class="box is-shadowless p-3 mb-2 split-participant" style="border-radius: 8px;">
                                 <div class="is-flex is-justify-content-space-between is-align-items-center">
                                     <div class="is-flex is-align-items-center" style="flex: 1; min-width: 0;">
                                         <span class="tag is-small mr-2 has-background-grey-lighter" x-text="idx + 1"></span>
@@ -678,7 +678,7 @@
                                     </div>
                                     <div class="is-flex is-align-items-is-flex-end">
                                         <div class="control has-icons-left mr-2" style="width: 130px;">
-                                            <input class="input is-small has-text-weight-bold has-text-black" type="number" step="0.01"
+                                            <input class="input is-small has-text-weight-bold" type="number" step="0.01"
                                                    x-model="splitDollars[p.id]"
                                                    placeholder="0.00">
                                             <span class="icon is-left is-small"><i class="fas fa-dollar-sign"></i></span>
@@ -750,6 +750,14 @@
 .card { border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); border: 1px solid var(--bulma-border); }
 .card-header { border-radius: 12px 12px 0 0; border-bottom: 1px solid var(--bulma-border); background: var(--bulma-scheme-main-bis); }
 .card-header-title { font-weight: 600; }
+.split-participant { border: 1px solid var(--bulma-border); }
+[data-theme="dark"] .tag.has-text-grey-dark {
+    color: var(--bulma-text-light) !important;
+}
+[data-theme="dark"] .tag.has-background-grey-lighter {
+    color: var(--bulma-text-strong) !important;
+    background-color: var(--bulma-scheme-main-ter) !important;
+}
 </style>
 
 <script>
