@@ -356,15 +356,36 @@ func handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleCreateUser(w http.ResponseWriter, r *http.Request) {
-	name := r.FormValue("name")
-	oidcSub := r.FormValue("oidc_sub")
-	aidClass := r.FormValue("aid_class")
-	payeeID := r.FormValue("actual_payee_id")
-
-	err := db.CreateUser(name, oidcSub, aidClass, payeeID)
-	if err != nil {
-		http.Redirect(w, r, "/admin?error=Duplicate OIDC Subject", http.StatusFound)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	names := r.Form["name"]
+	oidcSubs := r.Form["oidc_sub"]
+	aidClasses := r.Form["aid_class"]
+	payeeIDs := r.Form["actual_payee_id"]
+
+	for i := range names {
+		if strings.TrimSpace(names[i]) == "" || strings.TrimSpace(oidcSubs[i]) == "" {
+			continue
+		}
+		
+		var aidClass string
+		if i < len(aidClasses) {
+			aidClass = aidClasses[i]
+		}
+		
+		var payeeID string
+		if i < len(payeeIDs) {
+			payeeID = payeeIDs[i]
+		}
+
+		err := db.CreateUser(names[i], oidcSubs[i], aidClass, payeeID)
+		if err != nil {
+			// Log error but continue with other users
+			fmt.Printf("Error creating user %s: %v\n", names[i], err)
+		}
 	}
 
 	http.Redirect(w, r, "/admin", http.StatusFound)
