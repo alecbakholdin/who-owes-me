@@ -425,6 +425,11 @@ func handleGetPayees(w http.ResponseWriter, r *http.Request) {
 	tmpl.ExecuteTemplate(w, "payee_options.html", payees)
 }
 
+func handleRefreshCache(w http.ResponseWriter, r *http.Request) {
+	actual.ClearCache()
+	http.Redirect(w, r, "/admin", http.StatusFound)
+}
+
 func handleCreateSplits(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid form data", http.StatusBadRequest)

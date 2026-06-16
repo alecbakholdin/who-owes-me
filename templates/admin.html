@@ -1,7 +1,14 @@
 {{ define "content" }}
 <div class="mb-5">
-  <h1 class="title is-2 has-text-weight-bold">
-    <i class="fas fa-cogs mr-2"></i> Admin Dashboard
+  <h1 class="title is-2 has-text-weight-bold is-flex is-flex-direction-row is-align-items-center">
+	<div>
+		<i class="fas fa-cogs mr-2"></i> Admin Dashboard
+	</div>
+	<form action="/admin/refresh" method="POST" class="is-flex is-justify-content-center">
+		<button class="button is-small is-info is-light ml-3" type="submit" title="Refresh data from Actual Budget">
+			<i class="fas fa-sync-alt mr-1"></i> Refresh
+		</button>
+	</form>
   </h1>
 </div>
 

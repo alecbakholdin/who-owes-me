@@ -27,14 +27,15 @@ func RegisterRoutes(r chi.Router) {
 		r.Get("/users/{sub}", handleUserDashboardBySub)
 
 		// Admin routes
-		r.Group(func(r chi.Router) {
-			r.Use(AdminMiddleware)
-			r.Get("/admin", handleAdminDashboard)
-			r.Post("/admin/users", handleCreateUser)
-			r.Post("/admin/users/update", handleUpdateUser)
-			r.Post("/admin/splits", handleCreateSplits)
-			r.Get("/admin/payees", handleGetPayees) // HTMX endpoint
-		})
+			r.Group(func(r chi.Router) {
+				r.Use(AdminMiddleware)
+				r.Get("/admin", handleAdminDashboard)
+				r.Post("/admin/users", handleCreateUser)
+				r.Post("/admin/users/update", handleUpdateUser)
+				r.Post("/admin/splits", handleCreateSplits)
+				r.Get("/admin/payees", handleGetPayees) // HTMX endpoint
+				r.Post("/admin/refresh", handleRefreshCache)
+			})
 	})
 }
 

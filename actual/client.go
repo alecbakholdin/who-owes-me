@@ -62,6 +62,12 @@ type Payee struct {
 }
 
 func (c *Client) GetPayees() ([]Payee, error) {
+	if globalCache != nil {
+		if cached, ok := globalCache.get("payees"); ok {
+			return cached.([]Payee), nil
+		}
+	}
+
 	data, err := c.doRequest("GET", "/payees", nil)
 	if err != nil {
 		return nil, err
@@ -72,6 +78,10 @@ func (c *Client) GetPayees() ([]Payee, error) {
 	}
 	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, err
+	}
+
+	if globalCache != nil {
+		globalCache.set("payees", result.Data)
 	}
 
 	return result.Data, nil
@@ -123,6 +133,13 @@ func (c *Client) GetTransactionsByPayee(payeeID string) ([]Transaction, error) {
 }
 
 func (c *Client) GetTaggedTransactionsByPayee(payeeID string, tag string) ([]Transaction, error) {
+	key := "tx_payee_tag:" + payeeID + ":" + tag
+	if globalCache != nil {
+		if cached, ok := globalCache.get(key); ok {
+			return cached.([]Transaction), nil
+		}
+	}
+
 	query := map[string]interface{}{
 		"table": "transactions",
 		"select": []string{"*"},
@@ -133,10 +150,26 @@ func (c *Client) GetTaggedTransactionsByPayee(payeeID string, tag string) ([]Tra
 			},
 		},
 	}
-	return c.RunQuery(query)
+	txns, err := c.RunQuery(query)
+	if err != nil {
+		return nil, err
+	}
+
+	if globalCache != nil {
+		globalCache.set(key, txns)
+	}
+
+	return txns, nil
 }
 
 func (c *Client) GetTransactionsByTag(tag string) ([]Transaction, error) {
+	key := "tx_tag:" + tag
+	if globalCache != nil {
+		if cached, ok := globalCache.get(key); ok {
+			return cached.([]Transaction), nil
+		}
+	}
+
 	query := map[string]interface{}{
 		"table": "transactions",
 		"select": []string{"*"},
@@ -146,5 +179,14 @@ func (c *Client) GetTransactionsByTag(tag string) ([]Transaction, error) {
 			},
 		},
 	}
-	return c.RunQuery(query)
+	txns, err := c.RunQuery(query)
+	if err != nil {
+		return nil, err
+	}
+
+	if globalCache != nil {
+		globalCache.set(key, txns)
+	}
+
+	return txns, nil
 }

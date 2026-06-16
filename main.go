@@ -3,7 +3,9 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
+	"who-owes-me/actual"
 	"who-owes-me/auth"
 	"who-owes-me/db"
 	"who-owes-me/handlers"
@@ -23,6 +25,8 @@ func main() {
 	if err := auth.InitOIDC(); err != nil {
 		log.Printf("WARNING: OIDC not configured (%v) — running without authentication", err)
 	}
+
+	actual.InitCache(5 * time.Minute)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
