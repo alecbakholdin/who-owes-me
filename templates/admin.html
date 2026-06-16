@@ -197,9 +197,15 @@
                         <thead>
                             <tr>
                                 <th style="width: 24px;"></th>
-                                <th>Name</th>
-                                <th>Aid Class</th>
-                                <th class="has-text-right">Balance</th>
+                                <th style="cursor: pointer;" @click="setUserSort('name')">
+                                    Name <i class="fas" :class="userSortKey === 'name' ? (userSortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                                </th>
+                                <th style="cursor: pointer;" @click="setUserSort('aid_class')">
+                                    Aid Class <i class="fas" :class="userSortKey === 'aid_class' ? (userSortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                                </th>
+                                <th class="has-text-right" style="cursor: pointer;" @click="setUserSort('balance')">
+                                    Balance <i class="fas" :class="userSortKey === 'balance' ? (userSortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                                </th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -346,11 +352,19 @@
                     <table class="table is-fullwidth is-striped" style="white-space: nowrap;">
                         <thead>
                             <tr>
-                                <th>Date</th>
-                                <th>Payee</th>
-                                <th>Mapped User</th>
+                                <th style="cursor: pointer;" @click="setSort('date')">
+                                    Date <i class="fas" :class="sortKey === 'date' ? (sortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                                </th>
+                                <th style="cursor: pointer;" @click="setSort('payee')">
+                                    Payee <i class="fas" :class="sortKey === 'payee' ? (sortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                                </th>
+                                <th style="cursor: pointer;" @click="setSort('mapped_user_name')">
+                                    Mapped User <i class="fas" :class="sortKey === 'mapped_user_name' ? (sortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                                </th>
                                 <th>Note</th>
-                                <th class="has-text-right">Amount</th>
+                                <th class="has-text-right" style="cursor: pointer;" @click="setSort('amount')">
+                                    Amount <i class="fas" :class="sortKey === 'amount' ? (sortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
@@ -492,13 +506,21 @@
             </header>
             <div class="card-content p-0" x-show="!activeTx">
                 <div style="overflow-x: auto;">
-                <table class="table is-fullwidth is-hoverable" style="white-space: nowrap;">
+                    <table class="table is-fullwidth is-hoverable" style="white-space: nowrap;">
                     <thead>
                         <tr>
-                            <th>Date</th>
-                            <th>Payee</th>
-                            <th>Note</th>
-                            <th class="has-text-right">Total</th>
+                            <th style="cursor: pointer;" @click="setTxSort('date')">
+                                Date <i class="fas" :class="txSortKey === 'date' ? (txSortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                            </th>
+                            <th style="cursor: pointer;" @click="setTxSort('payee')">
+                                Payee <i class="fas" :class="txSortKey === 'payee' ? (txSortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                            </th>
+                            <th style="cursor: pointer;" @click="setTxSort('notes')">
+                                Note <i class="fas" :class="txSortKey === 'notes' ? (txSortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                            </th>
+                            <th class="has-text-right" style="cursor: pointer;" @click="setTxSort('amount')">
+                                Total <i class="fas" :class="txSortKey === 'amount' ? (txSortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
+                            </th>
                             <th class="has-text-centered">Action</th>
                         </tr>
                     </thead>
@@ -730,6 +752,20 @@ const allSplits = {{ .SplitsJSON }};
 const allTransactions = {{ .TransactionsJSON }};
 const allPayments = {{ .PaymentsJSON }};
 
+function sortBy(arr, getValue, dir) {
+    const sorted = [...arr];
+    const m = dir === 'asc' ? 1 : -1;
+    sorted.sort((a, b) => {
+        let va = getValue(a);
+        let vb = getValue(b);
+        if (va == null) return 1 * m;
+        if (vb == null) return -1 * m;
+        if (typeof va === 'string') return va.localeCompare(vb) * m;
+        return (va - vb) * m;
+    });
+    return sorted;
+}
+
 function adminDashboard() {
     return {
         editModalOpen: false,
@@ -742,6 +778,8 @@ function adminDashboard() {
         userPage: 1,
         userPerPage: 10,
         userSearch: '',
+        userSortKey: '',
+        userSortDir: 'asc',
 
         get editFilteredPayees() {
             if (this.editPayeeSearch === '') return allPayees.slice(0, 50);
@@ -762,9 +800,19 @@ function adminDashboard() {
             return allUsers.filter(u => u.name && u.name.toLowerCase().includes(q));
         },
 
+        get sortedUsers() {
+            if (!this.userSortKey) return this.filteredUsers;
+            return sortBy(this.filteredUsers, u => {
+                if (this.userSortKey === 'name') return u.name;
+                if (this.userSortKey === 'aid_class') return u.aid_class;
+                if (this.userSortKey === 'balance') return u.balance;
+                return u[this.userSortKey];
+            }, this.userSortDir);
+        },
+
         get paginatedUsers() {
             const start = (this.userPage - 1) * this.userPerPage;
-            return this.filteredUsers.slice(start, start + this.userPerPage);
+            return this.sortedUsers.slice(start, start + this.userPerPage);
         },
 
         get totalUserPages() {
@@ -801,6 +849,16 @@ function adminDashboard() {
             const p = allPayees.find(p => p.id === payeeId);
             return p ? p.name : payeeId;
         },
+
+        setUserSort(key) {
+            if (this.userSortKey === key) {
+                this.userSortDir = this.userSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.userSortKey = key;
+                this.userSortDir = 'asc';
+            }
+            this.userPage = 1;
+        },
     }
 }
 
@@ -810,6 +868,8 @@ function paymentsTable() {
         search: '',
         page: 1,
         perPage: 15,
+        sortKey: '',
+        sortDir: 'asc',
         assignOpen: false,
         assignTab: 'link',
         assignPayeeId: '',
@@ -827,9 +887,20 @@ function paymentsTable() {
             });
         },
 
+        get sortedPayments() {
+            if (!this.sortKey) return this.filteredPayments;
+            return sortBy(this.filteredPayments, p => {
+                if (this.sortKey === 'date') return p.date;
+                if (this.sortKey === 'payee') return this.payeeName(p.payee);
+                if (this.sortKey === 'mapped_user_name') return p.has_mapped_user ? p.mapped_user_name : '';
+                if (this.sortKey === 'amount') return p.amount;
+                return p[this.sortKey];
+            }, this.sortDir);
+        },
+
         get paginatedPayments() {
             const start = (this.page - 1) * this.perPage;
-            return this.filteredPayments.slice(start, start + this.perPage);
+            return this.sortedPayments.slice(start, start + this.perPage);
         },
 
         get totalPages() {
@@ -900,6 +971,16 @@ function paymentsTable() {
             if (cents < 0) return '-$' + (Math.abs(cents) / 100).toFixed(2);
             return '$' + (cents / 100).toFixed(2);
         },
+
+        setSort(key) {
+            if (this.sortKey === key) {
+                this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortKey = key;
+                this.sortDir = 'asc';
+            }
+            this.page = 1;
+        },
     }
 }
 
@@ -954,6 +1035,8 @@ function splitCalculator() {
         txPage: 1,
         txPerPage: 15,
         txSearch: '',
+        txSortKey: '',
+        txSortDir: 'asc',
 
         get filteredTransactions() {
             if (!this.txSearch) return this.transactions;
@@ -967,9 +1050,20 @@ function splitCalculator() {
             });
         },
 
+        get sortedTransactions() {
+            if (!this.txSortKey) return this.filteredTransactions;
+            return sortBy(this.filteredTransactions, t => {
+                if (this.txSortKey === 'date') return t.date;
+                if (this.txSortKey === 'payee') return this.payeeName(t.payee);
+                if (this.txSortKey === 'notes') return t.notes || '';
+                if (this.txSortKey === 'amount') return t.amount;
+                return t[this.txSortKey];
+            }, this.txSortDir);
+        },
+
         get paginatedTransactions() {
             const start = (this.txPage - 1) * this.txPerPage;
-            return this.filteredTransactions.slice(start, start + this.txPerPage);
+            return this.sortedTransactions.slice(start, start + this.txPerPage);
         },
 
         get totalTxPages() {
@@ -1073,6 +1167,16 @@ function splitCalculator() {
             const abs = Math.abs(cents);
             const formatted = "$" + (abs / 100).toFixed(2);
             return cents < 0 ? "-" + formatted : formatted;
+        },
+
+        setTxSort(key) {
+            if (this.txSortKey === key) {
+                this.txSortDir = this.txSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.txSortKey = key;
+                this.txSortDir = 'asc';
+            }
+            this.txPage = 1;
         },
         
         beforeSubmit(e) {

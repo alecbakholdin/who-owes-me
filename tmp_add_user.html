@@ -1,0 +1,156 @@
+        <div class="card mb-5" x-data="{ addTab: 'single', bulkRows: [{name: '', oidc_sub: '', aid_class: 'regular'}] }">
+            <header class="card-header is-flex is-align-items-center">
+                <p class="card-header-title">
+                    <i class="fas fa-user-plus mr-2"></i> Add User
+                </p>
+                <div class="tabs is-toggle is-small mb-0" style="margin-right: 1rem;">
+                    <ul>
+                        <li :class="{'is-active': addTab === 'single'}"><a @click="addTab = 'single'">Single</a></li>
+                        <li :class="{'is-active': addTab === 'bulk'}"><a @click="addTab = 'bulk'">Bulk</a></li>
+                    </ul>
+                </div>
+            </header>
+            <div class="card-content">
+                <form action="/admin/users" method="POST" x-show="addTab === 'single'">
+                    <div class="field">
+                        <label class="label">Name</label>
+                        <div class="control has-icons-left">
+                            <input class="input" type="text" name="name" placeholder="e.g. John Doe" :required="addTab === 'single'">
+                            <span class="icon is-left is-small"><i class="fas fa-user"></i></span>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">OIDC Username</label>
+                        <div class="control has-icons-left">
+                            <input class="input" type="text" name="oidc_sub" placeholder="Authelia username" :required="addTab === 'single'">
+                            <span class="icon is-left is-small"><i class="fas fa-id-badge"></i></span>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Aid Class</label>
+                        <div class="control has-icons-left">
+                            <div class="select is-fullwidth">
+                                <select name="aid_class">
+                                    <option value="regular">Regular</option>
+                                    <option value="needs_help">Needs Help</option>
+                                    <option value="will_help">Will Help</option>
+                                </select>
+                            </div>
+                            <span class="icon is-left is-small"><i class="fas fa-hands-helping"></i></span>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Actual Payee</label>
+                        <div class="control" x-data="payeeSearch()">
+                            <input type="hidden" name="actual_payee_id" :value="selectedPayeeId">
+                            
+                            <div class="dropdown" :class="{'is-active': open && filteredPayees.length > 0}" style="width: 100%;">
+                                <div class="dropdown-trigger" style="width: 100%;">
+                                    <input class="input" type="text" x-model="search" placeholder="Search payees..." 
+                                           @focus="open = true" 
+                                           @click.away="open = false"
+                                           @keydown.escape="open = false"
+                                           @keydown.down.prevent="highlightedIndex = Math.min(highlightedIndex + 1, filteredPayees.length - 1)"
+                                           @keydown.up.prevent="highlightedIndex = Math.max(highlightedIndex - 1, 0)"
+                                           @keydown.enter.prevent="highlightedIndex >= 0 && filteredPayees[highlightedIndex] && selectPayee(filteredPayees[highlightedIndex])"
+                                           @input="highlightedIndex = -1">
+                                </div>
+                                <div class="dropdown-menu" style="width: 100%;">
+                                    <div class="dropdown-content" style="max-height: 200px; overflow-y: auto;">
+                                        <template x-for="(p, i) in filteredPayees" :key="p.id">
+                                            <a class="dropdown-item" :class="{'is-active': i === highlightedIndex}" @click="selectPayee(p)" @mouseenter="highlightedIndex = i" x-text="p.name"></a>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="help is-success" x-show="selectedPayeeId">
+                                <i class="fas fa-check-circle mr-1"></i> Selected: <strong x-text="selectedPayeeName"></strong>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="control mt-5">
+                        <button class="button is-primary is-fullwidth">
+                            <i class="fas fa-plus mr-1"></i> Create User
+                        </button>
+                    </div>
+                </form>
+
+                <!-- BULK FORM -->
+                <form action="/admin/users" method="POST" x-show="addTab === 'bulk'" style="display: none;">
+                    <div style="overflow-x: auto;">
+                        <table class="table is-fullwidth is-striped is-narrow">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>OIDC Username</th>
+                                    <th>Aid Class</th>
+                                    <th>Actual Payee</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="(row, index) in bulkRows" :key="index">
+                                    <tr>
+                                        <td><input class="input is-small" type="text" name="name" x-model="row.name" placeholder="Name"></td>
+                                        <td><input class="input is-small" type="text" name="oidc_sub" x-model="row.oidc_sub" placeholder="Username"></td>
+                                        <td>
+                                            <div class="select is-small is-fullwidth">
+                                                <select name="aid_class" x-model="row.aid_class">
+                                                    <option value="regular">Regular</option>
+                                                    <option value="needs_help">Needs Help</option>
+                                                    <option value="will_help">Will Help</option>
+                                                </select>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div x-data="payeeSearch()">
+                                                <input type="hidden" name="actual_payee_id" :value="selectedPayeeId">
+                                                <div class="dropdown" :class="{'is-active': open && filteredPayees.length > 0}" style="width: 100%;">
+                                                    <div class="dropdown-trigger" style="width: 100%;">
+                                                        <input class="input is-small" type="text" x-model="search" placeholder="Search payees..." 
+                                                            @focus="open = true" 
+                                                            @click.away="open = false"
+                                                            @keydown.escape="open = false"
+                                                            @keydown.down.prevent="highlightedIndex = Math.min(highlightedIndex + 1, filteredPayees.length - 1)"
+                                                            @keydown.up.prevent="highlightedIndex = Math.max(highlightedIndex - 1, 0)"
+                                                            @keydown.enter.prevent="highlightedIndex >= 0 && filteredPayees[highlightedIndex] && selectPayee(filteredPayees[highlightedIndex])"
+                                                            @input="highlightedIndex = -1">
+                                                    </div>
+                                                    <div class="dropdown-menu" style="width: 100%; min-width: 200px;">
+                                                        <div class="dropdown-content" style="max-height: 150px; overflow-y: auto;">
+                                                            <template x-for="(p, i) in filteredPayees" :key="p.id">
+                                                                <a class="dropdown-item is-size-7" :class="{'is-active': i === highlightedIndex}" @click="selectPayee(p)" @mouseenter="highlightedIndex = i" x-text="p.name"></a>
+                                                            </template>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <p class="help is-success mt-0" x-show="selectedPayeeId" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; font-size: 0.65rem;">
+                                                    <i class="fas fa-check-circle mr-1"></i><span x-text="selectedPayeeName"></span>
+                                                </p>
+                                            </div>
+                                        </td>
+                                        <td class="has-text-right">
+                                            <button type="button" class="button is-small is-danger is-light" @click="bulkRows.splice(index, 1)" x-show="bulkRows.length > 1">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="is-flex is-justify-content-space-between mt-3">
+                        <button type="button" class="button is-small is-info is-light" @click="bulkRows.push({name: '', oidc_sub: '', aid_class: 'regular'})">
+                            <i class="fas fa-plus mr-1"></i> Add Row
+                        </button>
+                        <button type="submit" class="button is-success">
+                            <i class="fas fa-users mr-1"></i> Bulk Create
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
