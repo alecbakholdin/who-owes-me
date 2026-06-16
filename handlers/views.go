@@ -93,7 +93,7 @@ func renderError(w http.ResponseWriter, code int, message string) {
 func getUserDashboardData(user *db.User) (interface{}, error) {
 	actClient := actual.NewClient()
 	
-	deposits, _ := actClient.GetTransactionsByPayee(user.ActualPayeeID)
+	deposits, _ := actClient.GetTaggedTransactionsByPayee(user.ActualPayeeID, splitTag)
 	if deposits == nil {
 		deposits = []actual.Transaction{}
 	}
@@ -236,7 +236,7 @@ func handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		balance := 0
 		
 		// 1. Add all Actual Budget transactions associated with this user's Payee
-		deposits, _ := actClient.GetTransactionsByPayee(u.ActualPayeeID)
+		deposits, _ := actClient.GetTaggedTransactionsByPayee(u.ActualPayeeID, splitTag)
 		for _, d := range deposits {
 			if seenTx[d.ID] {
 				continue
@@ -273,7 +273,7 @@ func handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		if _, ok := payeeToUser[p.ID]; ok {
 			continue // already handled above
 		}
-		orphanTx, _ := actClient.GetTransactionsByPayee(p.ID)
+		orphanTx, _ := actClient.GetTaggedTransactionsByPayee(p.ID, splitTag)
 		for _, d := range orphanTx {
 			if seenTx[d.ID] {
 				continue

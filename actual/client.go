@@ -122,6 +122,20 @@ func (c *Client) GetTransactionsByPayee(payeeID string) ([]Transaction, error) {
 	return c.RunQuery(query)
 }
 
+func (c *Client) GetTaggedTransactionsByPayee(payeeID string, tag string) ([]Transaction, error) {
+	query := map[string]interface{}{
+		"table": "transactions",
+		"select": []string{"*"},
+		"filter": map[string]interface{}{
+			"payee": payeeID,
+			"notes": map[string]interface{}{
+				"$like": "%" + tag + "%",
+			},
+		},
+	}
+	return c.RunQuery(query)
+}
+
 func (c *Client) GetTransactionsByTag(tag string) ([]Transaction, error) {
 	query := map[string]interface{}{
 		"table": "transactions",
