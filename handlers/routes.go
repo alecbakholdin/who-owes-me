@@ -74,7 +74,7 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = auth.Verifier.Verify(ctx, rawIDToken)
+	idToken, err := auth.Verifier.Verify(ctx, rawIDToken)
 	if err != nil {
 		http.Error(w, "Failed to verify ID Token: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -101,7 +101,12 @@ func handleCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	auth.SetAdminCookie(w, isAdmin)
+	username := claims.PreferredUsername
+	if username == "" {
+		username = idToken.Subject
+	}
+
+	auth.SetSessionState(w, isAdmin, username)
 	auth.SetCookie(w, "auth_token", rawIDToken)
 	http.Redirect(w, r, "/", http.StatusFound)
 }
@@ -110,7 +115,7 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	idToken, _ := auth.GetCookie(r, "auth_token")
 
 	auth.ClearCookie(w, "auth_token")
-	auth.ClearCookie(w, "is_admin")
+	auth.ClearCookie(w, "app_session")
 
 	if auth.Provider != nil {
 		var providerClaims struct {
@@ -159,21 +164,21 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		authCtx := auth.GetClientContext(r.Context())
-		idToken, err := auth.Verifier.Verify(authCtx, tokenStr)
+		_, err = auth.Verifier.Verify(authCtx, tokenStr)
 		if err != nil {
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
 
-		isAdmin, err := auth.GetAdminCookie(r)
+		isAdmin, username, err := auth.GetSessionState(r)
 		if err != nil {
 			// Invalid or missing cookie (e.g. app restarted), force re-login
 			http.Redirect(w, r, "/login", http.StatusFound)
 			return
 		}
 
-		// Lookup user in DB
-		user, err := db.GetUserBySub(idToken.Subject)
+		// Lookup user in DB using the preferred username (or sub if missing)
+		user, err := db.GetUserBySub(username)
 		if err != nil {
 			if isAdmin {
 				// Admins are allowed to proceed even if not in DB, to bootstrap

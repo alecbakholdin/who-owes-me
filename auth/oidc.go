@@ -81,8 +81,9 @@ func InitOIDC() error {
 }
 
 type CustomClaims struct {
-	Groups []string `json:"groups"`
-	Email  string   `json:"email"`
+	Groups            []string `json:"groups"`
+	Email             string   `json:"email"`
+	PreferredUsername string   `json:"preferred_username"`
 }
 
 // Helpers for cookies
@@ -117,37 +118,44 @@ func GetCookie(r *http.Request, name string) (string, error) {
 	return cookie.Value, nil
 }
 
-// SetAdminCookie securely signs and sets the admin status
-func SetAdminCookie(w http.ResponseWriter, isAdmin bool) {
-	val := "false"
+// SetSessionState securely signs and sets the user session state
+func SetSessionState(w http.ResponseWriter, isAdmin bool, username string) {
+	adminStr := "false"
 	if isAdmin {
-		val = "true"
+		adminStr = "true"
 	}
+	val := fmt.Sprintf("%s|%s", adminStr, username)
+	
 	mac := hmac.New(sha256.New, cookieSecret)
 	mac.Write([]byte(val))
 	sig := hex.EncodeToString(mac.Sum(nil))
-	SetCookie(w, "is_admin", val+"|"+sig)
+	
+	SetCookie(w, "app_session", val+"|"+sig)
 }
 
-// GetAdminCookie retrieves and verifies the admin status from the signed cookie
-func GetAdminCookie(r *http.Request) (bool, error) {
-	cookie, err := GetCookie(r, "is_admin")
+// GetSessionState retrieves and verifies the session state from the signed cookie
+func GetSessionState(r *http.Request) (bool, string, error) {
+	cookie, err := GetCookie(r, "app_session")
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
+	
 	parts := strings.Split(cookie, "|")
-	if len(parts) != 2 {
-		return false, fmt.Errorf("invalid cookie format")
+	if len(parts) != 3 {
+		return false, "", fmt.Errorf("invalid cookie format")
 	}
-	val := parts[0]
-	sig := parts[1]
+	
+	adminStr := parts[0]
+	username := parts[1]
+	sig := parts[2]
 
+	val := fmt.Sprintf("%s|%s", adminStr, username)
 	mac := hmac.New(sha256.New, cookieSecret)
 	mac.Write([]byte(val))
 	expectedSig := hex.EncodeToString(mac.Sum(nil))
 
 	if subtle.ConstantTimeCompare([]byte(sig), []byte(expectedSig)) == 1 {
-		return val == "true", nil
+		return adminStr == "true", username, nil
 	}
-	return false, fmt.Errorf("invalid cookie signature")
+	return false, "", fmt.Errorf("invalid cookie signature")
 }
