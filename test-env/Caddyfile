@@ -1,0 +1,7 @@
+authelia.localhost:9091 {
+    tls internal
+    reverse_proxy authelia:9090 {
+        header_up X-Forwarded-Proto https
+        header_up X-Forwarded-Host {host}
+    }
+}

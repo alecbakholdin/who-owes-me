@@ -6,11 +6,19 @@ services:
     container_name: who-owes-me-authelia
     volumes:
       - ./test-env/authelia:/config
-    ports:
-      - "9091:9091"
     restart: unless-stopped
     environment:
       - TZ=UTC
+
+  authelia_proxy:
+    image: caddy:latest
+    container_name: who-owes-me-authelia-proxy
+    ports:
+      - "9091:9091"
+    volumes:
+      - ./test-env/Caddyfile:/etc/caddy/Caddyfile
+    depends_on:
+      - authelia
 
   actual_server:
     image: actualbudget/actual-server:latest

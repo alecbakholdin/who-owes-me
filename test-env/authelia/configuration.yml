@@ -3,7 +3,7 @@ jwt_secret: a_very_long_and_secure_jwt_secret_for_testing
 theme: light
 server:
   host: 0.0.0.0
-  port: 9091
+  port: 9090
   disable_healthcheck: true
 
 log:

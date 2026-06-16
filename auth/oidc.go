@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -28,37 +29,22 @@ func init() {
 	rand.Read(cookieSecret)
 }
 
-// httpsToHttpTransport rewrites HTTPS to HTTP for local testing against Authelia 4.38+
-type httpsToHttpTransport struct {
-	T http.RoundTripper
-}
-
-func (d *httpsToHttpTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req2 := req.Clone(req.Context())
-	if req2.URL.Scheme == "https" {
-		req2.URL.Scheme = "http"
-	}
-	req2.Header.Set("X-Forwarded-Proto", "https")
-	return d.T.RoundTrip(req2)
-}
-
 // GetClientContext creates an OIDC context with proper local docker mapping and HTTP overrides
 func GetClientContext(ctx context.Context) context.Context {
 	customTransport := http.DefaultTransport.(*http.Transport).Clone()
+	
+	// Skip TLS verification for local testing with Caddy self-signed certs
+	if envutil.Getenv("APP_ENV") != "production" || envutil.Getenv("DOCKER_ENV") == "true" {
+		customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+
 	if envutil.Getenv("DOCKER_ENV") == "true" {
 		customTransport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 			if addr == "localhost:9091" || addr == "authelia.localhost:9091" {
-				addr = "authelia:9091"
+				addr = "authelia_proxy:9091"
 			}
 			return net.Dial(network, addr)
 		}
-	}
-
-	issuerURL := envutil.Getenv("OIDC_ISSUER_URL")
-	if strings.Contains(issuerURL, "localhost") {
-		return oidc.ClientContext(ctx, &http.Client{
-			Transport: &httpsToHttpTransport{T: customTransport},
-		})
 	}
 
 	return oidc.ClientContext(ctx, &http.Client{Transport: customTransport})
