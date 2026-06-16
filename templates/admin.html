@@ -25,7 +25,7 @@
 {{ end }}
 
 <div x-data="adminDashboard()">
-        <div class="card mb-5" x-data="{ addTab: 'single', bulkRows: [{name: '', oidc_sub: '', aid_class: 'regular'}] }">
+        <div class="card mb-5" x-data="{ addTab: 'single', bulkRows: [{name: '', oidc_sub: '', aid_class: 'regular'}], addBulkRow(el) { this.bulkRows.push({name: '', oidc_sub: '', aid_class: 'regular'}); this.$nextTick(() => { const trs = el.closest('table').querySelectorAll('tbody tr'); const lastTr = trs[trs.length - 1]; if (lastTr) { const firstInput = lastTr.querySelector(`input[name='name']`); if (firstInput) firstInput.focus(); } }); } }">
             <header class="card-header is-flex is-align-items-center">
                 <p class="card-header-title">
                     <i class="fas fa-user-plus mr-2"></i> Add User
@@ -83,7 +83,7 @@
                                            @keydown.down.prevent="highlightedIndex = Math.min(highlightedIndex + 1, filteredPayees.length - 1)"
                                            @keydown.up.prevent="highlightedIndex = Math.max(highlightedIndex - 1, 0)"
                                            @keydown.enter.prevent="highlightedIndex >= 0 && filteredPayees[highlightedIndex] && selectPayee(filteredPayees[highlightedIndex])"
-                                           @input="highlightedIndex = -1">
+                                           @input="highlightedIndex = 0">
                                 </div>
                                 <div class="dropdown-menu" style="width: 100%;">
                                     <div class="dropdown-content" style="max-height: 200px; overflow-y: auto;">
@@ -108,7 +108,7 @@
 
                 <!-- BULK FORM -->
                 <form action="/admin/users" method="POST" x-show="addTab === 'bulk'" style="display: none;">
-                    <div style="overflow-x: auto;">
+                    <div>
                         <table class="table is-fullwidth is-striped is-narrow">
                             <thead>
                                 <tr>
@@ -122,11 +122,11 @@
                             <tbody>
                                 <template x-for="(row, index) in bulkRows" :key="index">
                                     <tr>
-                                        <td><input class="input is-small" type="text" name="name" x-model="row.name" placeholder="Name"></td>
-                                        <td><input class="input is-small" type="text" name="oidc_sub" x-model="row.oidc_sub" placeholder="Username"></td>
+                                        <td><input class="input is-small" type="text" name="name" x-model="row.name" placeholder="Name" @keydown.enter.prevent="addBulkRow($el)"></td>
+                                        <td><input class="input is-small" type="text" name="oidc_sub" x-model="row.oidc_sub" placeholder="Username" @keydown.enter.prevent="addBulkRow($el)"></td>
                                         <td>
                                             <div class="select is-small is-fullwidth">
-                                                <select name="aid_class" x-model="row.aid_class">
+                                                <select name="aid_class" x-model="row.aid_class" @keydown.enter.prevent="addBulkRow($el)">
                                                     <option value="regular">Regular</option>
                                                     <option value="needs_help">Needs Help</option>
                                                     <option value="will_help">Will Help</option>
@@ -144,8 +144,8 @@
                                                             @keydown.escape="open = false"
                                                             @keydown.down.prevent="highlightedIndex = Math.min(highlightedIndex + 1, filteredPayees.length - 1)"
                                                             @keydown.up.prevent="highlightedIndex = Math.max(highlightedIndex - 1, 0)"
-                                                            @keydown.enter.prevent="highlightedIndex >= 0 && filteredPayees[highlightedIndex] && selectPayee(filteredPayees[highlightedIndex])"
-                                                            @input="highlightedIndex = -1">
+                                                            @keydown.enter.prevent="if (open && highlightedIndex >= 0 && filteredPayees[highlightedIndex]) { selectPayee(filteredPayees[highlightedIndex]); } else { addBulkRow($el); }"
+                                                            @input="highlightedIndex = 0">
                                                     </div>
                                                     <div class="dropdown-menu" style="width: 100%; min-width: 200px;">
                                                         <div class="dropdown-content" style="max-height: 150px; overflow-y: auto;">
@@ -305,7 +305,7 @@
                                                @keydown.down.prevent="editPayeeHighlightedIndex = Math.min(editPayeeHighlightedIndex + 1, editFilteredPayees.length - 1)"
                                                @keydown.up.prevent="editPayeeHighlightedIndex = Math.max(editPayeeHighlightedIndex - 1, 0)"
                                                @keydown.enter.prevent="editPayeeHighlightedIndex >= 0 && editFilteredPayees[editPayeeHighlightedIndex] && editSelectPayee(editFilteredPayees[editPayeeHighlightedIndex])"
-                                               @input="editPayeeHighlightedIndex = -1">
+                                               @input="editPayeeHighlightedIndex = 0">
                                     </div>
                                     <div class="dropdown-menu" style="width: 100%;">
                                         <div class="dropdown-content" style="max-height: 200px; overflow-y: auto;">
@@ -583,7 +583,7 @@
                     <div class="field">
                         <div class="control" style="position: relative;">
                             <input class="input" type="text" x-model="addSearch"
-                                   @input="addSearchOpen = true; addHighlightedIndex = -1"
+                                   @input="addSearchOpen = true; addHighlightedIndex = 0"
                                    @click.away="addSearchOpen = false"
                                    @keydown.escape="addSearchOpen = false"
                                    @keydown.down.prevent="addHighlightedIndex = Math.min(addHighlightedIndex + 1, filteredAddable.length - 1)"
@@ -649,7 +649,7 @@
                                     </div>
                                     <div class="is-flex is-align-items-is-flex-end">
                                         <div class="control has-icons-left mr-2" style="width: 130px;">
-                                            <input class="input is-small" type="number" step="0.01"
+                                            <input class="input is-small has-text-weight-bold has-text-black" type="number" step="0.01"
                                                    x-model="splitDollars[p.id]"
                                                    placeholder="0.00">
                                             <span class="icon is-left is-small"><i class="fas fa-dollar-sign"></i></span>
