@@ -46,6 +46,7 @@ func createTables() {
 		actual_transaction_id TEXT NOT NULL,
 		user_id INTEGER NOT NULL,
 		amount_owed INTEGER NOT NULL,
+		auto_created INTEGER NOT NULL DEFAULT 0,
 		FOREIGN KEY (user_id) REFERENCES users (id),
 		UNIQUE(actual_transaction_id, user_id)
 	);`
@@ -60,9 +61,12 @@ func createTables() {
 		log.Fatalf("Error creating expense_splits table: %v", err)
 	}
 
-	// Apply user requested migrations
+	// Apply migrations
 	DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_expense_splits_tx_user ON expense_splits(actual_transaction_id, user_id)")
 	DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_payee ON users(actual_payee_id) WHERE actual_payee_id != ''")
+	DB.Exec("ALTER TABLE expense_splits ADD COLUMN auto_created INTEGER NOT NULL DEFAULT 0")
+	DB.Exec("ALTER TABLE expense_splits ADD COLUMN expense_date TEXT NOT NULL DEFAULT ''")
+	DB.Exec("ALTER TABLE expense_splits ADD COLUMN expense_note TEXT NOT NULL DEFAULT ''")
 
 	fmt.Println("Database initialized successfully.")
 }
@@ -82,6 +86,9 @@ type ExpenseSplit struct {
 	ActualTransactionID string `json:"actual_transaction_id"`
 	UserID              int    `json:"user_id"`
 	AmountOwed          int    `json:"amount_owed"` // in cents
+	AutoCreated         bool   `json:"auto_created"`
+	ExpenseDate         string `json:"expense_date"`
+	ExpenseNote         string `json:"expense_note"`
 }
 
 // --- User Queries ---
@@ -143,22 +150,35 @@ func GetAllUsers() ([]User, error) {
 
 // --- Split Queries ---
 
-func SetSplit(txID string, userID int, amount int) error {
-	if amount <= 0 {
-		_, err := DB.Exec("DELETE FROM expense_splits WHERE actual_transaction_id = ? AND user_id = ?", txID, userID)
-		return err
-	}
+func SetAutoSplit(txID string, userID int, amount int, date string, note string) error {
 	_, err := DB.Exec(`
-		INSERT INTO expense_splits (actual_transaction_id, user_id, amount_owed) 
-		VALUES (?, ?, ?)
+		INSERT INTO expense_splits (actual_transaction_id, user_id, amount_owed, auto_created, expense_date, expense_note) 
+		VALUES (?, ?, ?, 1, ?, ?)
 		ON CONFLICT(actual_transaction_id, user_id) DO UPDATE SET 
-			amount_owed=excluded.amount_owed
-	`, txID, userID, amount)
+			amount_owed=excluded.amount_owed, auto_created=excluded.auto_created,
+			expense_date=excluded.expense_date, expense_note=excluded.expense_note
+	`, txID, userID, amount, date, note)
+	return err
+}
+
+func ClearSplitsForTx(txID string) error {
+	_, err := DB.Exec("DELETE FROM expense_splits WHERE actual_transaction_id = ?", txID)
+	return err
+}
+
+func SetSplit(txID string, userID int, amount int, date string, note string) error {
+	_, err := DB.Exec(`
+		INSERT INTO expense_splits (actual_transaction_id, user_id, amount_owed, auto_created, expense_date, expense_note) 
+		VALUES (?, ?, ?, 0, ?, ?)
+		ON CONFLICT(actual_transaction_id, user_id) DO UPDATE SET 
+			amount_owed=excluded.amount_owed, auto_created=0,
+			expense_date=excluded.expense_date, expense_note=excluded.expense_note
+	`, txID, userID, amount, date, note)
 	return err
 }
 
 func GetAllSplits() ([]ExpenseSplit, error) {
-	rows, err := DB.Query("SELECT id, actual_transaction_id, user_id, amount_owed FROM expense_splits")
+	rows, err := DB.Query("SELECT id, actual_transaction_id, user_id, amount_owed, auto_created, expense_date, expense_note FROM expense_splits")
 	if err != nil {
 		return nil, err
 	}
@@ -167,16 +187,18 @@ func GetAllSplits() ([]ExpenseSplit, error) {
 	var splits []ExpenseSplit
 	for rows.Next() {
 		var s ExpenseSplit
-		if err := rows.Scan(&s.ID, &s.ActualTransactionID, &s.UserID, &s.AmountOwed); err != nil {
+		var autoCreated int
+		if err := rows.Scan(&s.ID, &s.ActualTransactionID, &s.UserID, &s.AmountOwed, &autoCreated, &s.ExpenseDate, &s.ExpenseNote); err != nil {
 			return nil, err
 		}
+		s.AutoCreated = autoCreated == 1
 		splits = append(splits, s)
 	}
 	return splits, nil
 }
 
 func GetSplitsForUser(userID int) ([]ExpenseSplit, error) {
-	rows, err := DB.Query("SELECT id, actual_transaction_id, user_id, amount_owed FROM expense_splits WHERE user_id = ?", userID)
+	rows, err := DB.Query("SELECT id, actual_transaction_id, user_id, amount_owed, auto_created, expense_date, expense_note FROM expense_splits WHERE user_id = ?", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -185,9 +207,11 @@ func GetSplitsForUser(userID int) ([]ExpenseSplit, error) {
 	var splits []ExpenseSplit
 	for rows.Next() {
 		var s ExpenseSplit
-		if err := rows.Scan(&s.ID, &s.ActualTransactionID, &s.UserID, &s.AmountOwed); err != nil {
+		var autoCreated int
+		if err := rows.Scan(&s.ID, &s.ActualTransactionID, &s.UserID, &s.AmountOwed, &autoCreated, &s.ExpenseDate, &s.ExpenseNote); err != nil {
 			return nil, err
 		}
+		s.AutoCreated = autoCreated == 1
 		splits = append(splits, s)
 	}
 	return splits, nil

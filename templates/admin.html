@@ -345,170 +345,13 @@
             </div>
         </div>
 
-        <div class="card mb-5" x-data="paymentsTable()">
-            <header class="card-header">
-                <p class="card-header-title">
-                    <i class="fas fa-arrow-up mr-2"></i> Payments
-                </p>
-                <div class="card-header-icon" style="flex: 1; justify-content: flex-end;">
-                    <input class="input is-small" type="text" x-model="search" placeholder="Search payments..." style="max-width: 240px;">
-                </div>
-            </header>
-            <div class="card-content p-0">
-                <div style="overflow-x: auto;">
-                    <table class="table is-fullwidth is-striped" style="white-space: nowrap;">
-                        <thead>
-                            <tr>
-                                <th style="cursor: pointer;" @click="setSort('date')">
-                                    Date <i class="fas" :class="sortKey === 'date' ? (sortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
-                                </th>
-                                <th style="cursor: pointer;" @click="setSort('payee')">
-                                    Payee <i class="fas" :class="sortKey === 'payee' ? (sortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
-                                </th>
-                                <th style="cursor: pointer;" @click="setSort('mapped_user_name')">
-                                    Mapped User <i class="fas" :class="sortKey === 'mapped_user_name' ? (sortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
-                                </th>
-                                <th>Note</th>
-                                <th class="has-text-right" style="cursor: pointer;" @click="setSort('amount')">
-                                    Amount <i class="fas" :class="sortKey === 'amount' ? (sortDir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'"></i>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="p in paginatedPayments" :key="p.id">
-                                <tr>
-                                    <td class="has-text-grey" x-text="formatDate(p.date)"></td>
-                                    <td x-text="payeeName(p.payee)"></td>
-                                    <td>
-                                        <template x-if="p.has_mapped_user">
-                                            <span class="has-text-weight-medium" x-text="p.mapped_user_name"></span>
-                                        </template>
-                                        <template x-if="!p.has_mapped_user">
-                                            <button class="button is-small is-danger is-light" @click="openAssign(p.payee, p.id)">
-                                                <i class="fas fa-user-plus mr-1"></i> Assign
-                                            </button>
-                                        </template>
-                                    </td>
-                                    <td x-text="p.notes" style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></td>
-                                    <td class="has-text-right has-text-weight-bold" :class="p.amount < 0 ? 'has-text-danger' : p.amount > 0 ? 'has-text-success' : ''" x-text="formatCents(p.amount)"></td>
-                                </tr>
-                            </template>
-                        <tr x-show="allPayments.length === 0">
-                            <td colspan="5" class="has-text-centered has-text-grey py-4">
-                                <i class="fas fa-inbox fa-2x mb-2" style="display: block;"></i>
-                                No payments yet
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                </div>
-                <div class="px-3 py-3 is-flex is-justify-content-space-between is-align-items-center" x-show="totalPages > 1" style="border-top: 1px solid var(--bulma-border);">
-                    <div class="field has-addons">
-                        <p class="control">
-                            <button class="button is-small" :disabled="page === 1" @click="page--">
-                                <i class="fas fa-chevron-left"></i>
-                            </button>
-                        </p>
-                        <p class="control">
-                            <button class="button is-small" :disabled="page === totalPages" @click="page++">
-                                <i class="fas fa-chevron-right"></i>
-                            </button>
-                        </p>
-                    </div>
-                    <span class="has-text-grey is-size-7" x-text="'Page ' + page + ' of ' + totalPages"></span>
-                </div>
-            </div>
-
-            <!-- Assign Payee Modal -->
-            <div class="modal" :class="{'is-active': assignOpen}">
-                <div class="modal-background" @click="assignOpen = false"></div>
-                <div class="modal-card">
-                    <header class="modal-card-head">
-                        <p class="modal-card-title"><i class="fas fa-user-tag mr-2"></i> Assign Payee</p>
-                        <button class="delete" @click="assignOpen = false"></button>
-                    </header>
-                    <section class="modal-card-body">
-                        <div class="tabs is-boxed is-medium mb-4">
-                            <ul>
-                                <li :class="{'is-active': assignTab === 'link'}">
-                                    <a @click.prevent="assignTab = 'link'"><i class="fas fa-link mr-1"></i> Link to User</a>
-                                </li>
-                                <li :class="{'is-active': assignTab === 'create'}">
-                                    <a @click.prevent="assignTab = 'create'"><i class="fas fa-plus mr-1"></i> New User</a>
-                                </li>
-                            </ul>
-                        </div>
-
-                        <div x-show="assignTab === 'link'">
-                            <p class="mb-3 has-text-grey" x-text="'Select a user to link to payee: ' + assignPayeeName"></p>
-                            <template x-if="usersWithoutPayee.length === 0">
-                                <div class="notification is-warning is-light">
-                                    <i class="fas fa-exclamation-triangle mr-1"></i> All users already have a payee assigned.
-                                </div>
-                            </template>
-                            <template x-for="u in usersWithoutPayee" :key="u.id">
-                                <div class="box is-shadowless p-3 mb-2" style="border: 1px solid var(--bulma-border); border-radius: 8px; cursor: pointer;" @click="linkUser(u.id)">
-                                    <div class="is-flex is-justify-content-space-between is-align-items-center">
-                                        <span class="has-text-weight-medium" x-text="u.name"></span>
-                                        <span class="tag" :class="aidClassColor(u.aid_class)" x-text="aidClassLabel(u.aid_class)"></span>
-                                    </div>
-                                    <p class="is-size-7 has-text-grey mt-1" x-text="u.oidc_sub"></p>
-                                </div>
-                            </template>
-                        </div>
-
-                        <div x-show="assignTab === 'create'">
-                            <form method="POST" action="/admin/users" id="createUserForm">
-                                <input type="hidden" name="actual_payee_id" :value="assignPayeeId">
-                                <div class="field">
-                                    <label class="label">Name</label>
-                                    <div class="control has-icons-left">
-                                        <input class="input" type="text" name="name" placeholder="e.g. John Doe" required>
-                                        <span class="icon is-left is-small"><i class="fas fa-user"></i></span>
-                                    </div>
-                                </div>
-                                <div class="field">
-                                    <label class="label">OIDC Username</label>
-                                    <div class="control has-icons-left">
-                                        <input class="input" type="text" name="oidc_sub" placeholder="Authelia username" required>
-                                        <span class="icon is-left is-small"><i class="fas fa-id-badge"></i></span>
-                                    </div>
-                                </div>
-                                <div class="field">
-                                    <label class="label">Aid Class</label>
-                                    <div class="control has-icons-left">
-                                        <div class="select is-fullwidth">
-                                            <select name="aid_class">
-                                                <option value="regular">Regular</option>
-                                                <option value="needs_help">Needs Help</option>
-                                                <option value="will_help">Will Help</option>
-                                            </select>
-                                        </div>
-                                        <span class="icon is-left is-small"><i class="fas fa-hands-helping"></i></span>
-                                    </div>
-                                </div>
-                            </form>
-                        </div>
-                    </section>
-                    <footer class="modal-card-foot">
-                        <template x-if="assignTab === 'create'">
-                            <button type="submit" form="createUserForm" class="button is-success">
-                                <i class="fas fa-check mr-1"></i> Create & Assign
-                            </button>
-                        </template>
-                        <button class="button" @click="assignOpen = false">Cancel</button>
-                    </footer>
-                </div>
-            </div>
-        </div>
-
         <div class="card" x-data="splitCalculator()">
             <header class="card-header">
                 <p class="card-header-title">
-                    <i class="fas fa-receipt mr-2"></i> Recent Expenses <span class="tag is-info is-light ml-2">{{ .SplitTag }}</span>
+                    <i class="fas fa-receipt mr-2"></i> Recent Transactions <span class="tag is-info is-light ml-2">{{ .SplitTag }}</span>
                 </p>
                 <div class="card-header-icon" style="flex: 1; justify-content: flex-end;">
-                    <input class="input is-small" type="text" x-model="txSearch" placeholder="Search expenses..." style="max-width: 240px;">
+                    <input class="input is-small" type="text" x-model="txSearch" placeholder="Search transactions..." style="max-width: 240px;">
                 </div>
             </header>
             <div class="card-content p-0" x-show="!activeTx">
@@ -540,12 +383,12 @@
                                 <td class="has-text-right has-text-weight-bold" :class="t.amount < 0 ? 'has-text-danger' : t.amount > 0 ? 'has-text-success' : ''" x-text="formatCents(t.amount)"></td>
                                 <td class="has-text-centered">
                                     <template x-if="hasSplits(t.id)">
-                                        <button class="button is-small is-warning" @click="startSplit(t.id, t.amount, t.notes)">
+                                        <button class="button is-small is-warning" @click="startSplit(t.id, t.amount, t.notes, t.date)">
                                             <i class="fas fa-pencil mr-1"></i> Edit
                                         </button>
                                     </template>
                                     <template x-if="!hasSplits(t.id)">
-                                        <button class="button is-small is-info" @click="startSplit(t.id, t.amount, t.notes)">
+                                        <button class="button is-small is-info" @click="startSplit(t.id, t.amount, t.notes, t.date)">
                                             <i class="fas fa-code-fork mr-1"></i> Split
                                         </button>
                                     </template>
@@ -553,9 +396,9 @@
                             </tr>
                         </template>
                         <tr x-show="allTransactions.length === 0">
-                            <td colspan="5" class="has-text-centered has-text-grey py-4">
+                            <td colspan="6" class="has-text-centered has-text-grey py-4">
                                 <i class="fas fa-receipt fa-2x mb-2" style="display: block;"></i>
-                                No tagged expenses yet
+                                No tagged transactions yet
                             </td>
                         </tr>
                     </tbody>
@@ -580,38 +423,76 @@
             
             <!-- Split Form -->
             <div x-show="activeTx" class="card-content" style="display: none;">
-                <div class="is-flex is-justify-content-space-between is-align-items-center mb-4">
-                    <h3 class="title is-5 mb-0">
-                        <i class="fas fa-arrows-split-up-and-left mr-2"></i> Splitting: <strong x-text="activeTxNote"></strong>
-                    </h3>
-                    <button class="button is-small" @click="activeTx = null">
-                        <i class="fas fa-times mr-1"></i> Cancel
+                <div class="is-flex is-justify-content-space-between is-align-items-start mb-4">
+                    <div>
+                        <h3 class="title is-5 mb-1">
+                            <i class="fas fa-arrows-split-up-and-left mr-2"></i> Splitting
+                        </h3>
+                        <p class="subtitle is-6 has-text-grey">
+                            <strong x-text="activeTxNote" class="has-text-grey-dark"></strong>
+                            <span class="tag is-info is-light ml-2 is-rounded">Total: <span x-text="formatCurrency(totalAmount)" class="ml-1 has-text-weight-bold"></span></span>
+                        </p>
+                    </div>
+                    <button type="button" class="button is-small is-ghost" @click="activeTx = null">
+                        <i class="fas fa-times"></i>
                     </button>
                 </div>
                 
-                <div class="notification is-info is-light py-3 mb-4">
-                    <p class="is-size-5 has-text-weight-bold">
-                        Total: <span x-text="formatCurrency(totalAmount)"></span>
-                    </p>
-                </div>
-                
-                <div class="field is-grouped mb-5">
-                    <p class="control">
-                        <button class="button is-primary is-outlined is-small" @click="calculateEvenly()">
-                            <i class="fas fa-equals mr-1"></i> Evenly (Standard)
-                        </button>
-                    </p>
-                    <p class="control">
-                        <button class="button is-link is-outlined is-small" @click="calculateEvenlyWithAid()">
-                            <i class="fas fa-hand-holding-heart mr-1"></i> Evenly w/ Aid
-                        </button>
-                    </p>
+                <div class="is-flex is-justify-content-flex-end mb-3" x-show="participants.length > 0">
+                    <button type="button" class="button is-small mr-2" @click="calculateEvenly()">
+                        <i class="fas fa-equals mr-1"></i> Evenly
+                    </button>
+                    <button type="button" class="button is-small is-link is-light" @click="calculateEvenlyWithAid()">
+                        <i class="fas fa-hand-holding-heart mr-1"></i> Evenly w/ Aid
+                    </button>
                 </div>
 
-                <div class="mb-4">
-                    <div class="field">
-                        <div class="control" style="position: relative;">
-                            <input class="input" type="text" x-model="addSearch"
+                <form action="/admin/splits" method="POST" @submit="beforeSubmit">
+                    <input type="hidden" name="actual_transaction_id" :value="activeTx">
+                    <input type="hidden" name="actual_transaction_date" :value="activeTxDate">
+                    <input type="hidden" name="actual_transaction_note" :value="activeTxNote">
+                    
+                    <div x-show="participants.length === 0" class="mb-4">
+                        <div class="box has-text-centered py-6 is-shadowless" style="background-color: var(--bulma-scheme-main-ter); border: 1px dashed var(--bulma-border);">
+                            <i class="fas fa-user-plus fa-2x mb-3 has-text-grey-light" style="display: block;"></i>
+                            <p class="has-text-grey mb-3">No participants added yet.</p>
+                        </div>
+                    </div>
+
+                    <div class="mb-2 is-flex is-justify-content-space-between is-align-items-center" x-show="participants.length > 0">
+                        <span class="has-text-weight-semibold is-size-7 has-text-grey">PARTICIPANTS (<span x-text="participants.length"></span>)</span>
+                        <span class="is-size-7" :class="getRemaining() === 0 ? 'has-text-success has-text-weight-bold' : 'has-text-grey'">
+                            Allocated: <span x-text="formatCurrency(allocated())"></span> / <span x-text="formatCurrency(totalAmount)"></span>
+                        </span>
+                    </div>
+
+                    <div style="max-height: 300px; overflow-y: auto; margin-bottom: 1rem;" x-show="participants.length > 0">
+                        <template x-for="(p, idx) in participants" :key="p.id">
+                            <div class="box is-shadowless p-3 mb-2 split-participant is-flex is-align-items-center is-justify-content-space-between" style="border-radius: 8px;">
+                                <div class="is-flex is-align-items-center" style="min-width: 0; flex-shrink: 1;">
+                                    <span class="has-text-weight-medium has-text-overflow-ellipsis mr-2" x-text="p.name" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+                                    <span class="tag is-small"
+                                          :class="{'is-danger is-light': p.aid_class === 'needs_help', 'is-success is-light': p.aid_class === 'will_help', 'is-light has-text-grey-dark': p.aid_class === 'regular'}"
+                                          x-text="aidClassLabel(p.aid_class)"></span>
+                                </div>
+                                <div class="is-flex is-align-items-center ml-2" style="flex-shrink: 0;">
+                                    <div class="control has-icons-left mr-2" style="width: 110px;">
+                                        <input class="input is-small has-text-weight-bold has-text-right" type="number" step="0.01"
+                                               x-model="splitDollars[p.id]"
+                                               placeholder="0.00">
+                                        <span class="icon is-left is-small has-text-grey-light"><i class="fas fa-dollar-sign"></i></span>
+                                    </div>
+                                    <button type="button" class="button is-small is-ghost has-text-danger px-2" @click="removeParticipant(p.id)" title="Remove">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="mb-5 mt-2 is-flex is-align-items-center">
+                        <div class="control has-icons-left mr-2" style="flex-grow: 1; position: relative;">
+                            <input class="input is-small" type="text" x-model="addSearch"
                                    @input="addSearchOpen = true; addHighlightedIndex = 0"
                                    @click.away="addSearchOpen = false"
                                    @keydown.escape="addSearchOpen = false"
@@ -619,14 +500,15 @@
                                    @keydown.up.prevent="addHighlightedIndex = Math.max(addHighlightedIndex - 1, 0)"
                                    @keydown.enter.prevent="addHighlightedIndex >= 0 && filteredAddable[addHighlightedIndex] && (addParticipant(filteredAddable[addHighlightedIndex]), addSearch = '', addSearchOpen = false)"
                                    placeholder="Add participant by name...">
+                            <span class="icon is-left is-small has-text-grey"><i class="fas fa-search"></i></span>
                             <div class="dropdown" :class="{'is-active': addSearchOpen && filteredAddable.length > 0}"
-                                 style="width: 100%; position: absolute; top: 100%; left: 0; z-index: 30;">
-                                <div class="dropdown-content" style="max-height: 200px; overflow-y: auto;">
+                                 style="width: 100%; position: absolute; bottom: 100%; left: 0; z-index: 30; margin-bottom: 4px;">
+                                <div class="dropdown-content" style="max-height: 200px; overflow-y: auto; box-shadow: 0 -2px 10px rgba(0,0,0,0.1);">
                                     <template x-for="(u, i) in filteredAddable" :key="u.id">
                                         <a class="dropdown-item" :class="{'is-active': i === addHighlightedIndex}" @click="addParticipant(u); addSearch = ''; addSearchOpen = false" @mouseenter="addHighlightedIndex = i">
                                             <span x-text="u.name"></span>
                                             <span class="tag is-small ml-1"
-                                                  :class="{'is-danger': u.aid_class === 'needs_help', 'is-success': u.aid_class === 'will_help', 'is-light has-text-grey-dark': u.aid_class === 'regular'}"
+                                                  :class="{'is-danger is-light': u.aid_class === 'needs_help', 'is-success is-light': u.aid_class === 'will_help', 'is-light has-text-grey-dark': u.aid_class === 'regular'}"
                                                   x-text="aidClassLabel(u.aid_class)"></span>
                                         </a>
                                     </template>
@@ -636,74 +518,29 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="field">
-                        <a class="is-size-7 has-text-link" @click="showImportModal = true; $event.preventDefault()" href="#">
-                            <i class="fas fa-download mr-1"></i> Bulk Import
-                        </a>
-                    </div>
-                </div>
-
-                <form action="/admin/splits" method="POST" @submit="beforeSubmit">
-                    <input type="hidden" name="actual_transaction_id" :value="activeTx">
-                    
-                    <div x-show="participants.length === 0" class="mb-4">
-                        <p class="has-text-grey has-text-centered py-4">
-                            <i class="fas fa-users fa-2x mb-3" style="display: block;"></i>
-                            No participants yet. Search for a user above or
-                            <a class="has-text-link" @click="showImportModal = true; $event.preventDefault()" href="#">import a list</a>.
-                        </p>
+                        <button type="button" class="button is-small is-ghost px-2" @click="showImportModal = true; $event.preventDefault()" title="Bulk Import">
+                            <i class="fas fa-users-cog"></i>
+                        </button>
                     </div>
 
-                    <div class="mb-3 is-flex is-justify-content-space-between is-align-items-center" x-show="participants.length > 0">
-                        <span class="has-text-grey is-size-7">
-                            <span x-text="participants.length"></span> participant<span x-show="participants.length !== 1">s</span>
-                        </span>
-                        <span class="has-text-grey is-size-7">
-                            <i class="fas fa-dollar-sign mr-1"></i>
-                            Allocated: <span x-text="formatCurrency(allocated())"></span> / <span x-text="formatCurrency(totalAmount)"></span>
-                        </span>
+                    <div class="notification is-danger is-light mt-4 py-2 px-3 is-flex is-align-items-center" x-show="getRemaining() !== 0">
+                        <i class="fas fa-exclamation-circle mr-2"></i> 
+                        <span class="is-size-7">Amount remaining to allocate: <strong x-text="formatCurrency(getRemaining())"></strong></span>
                     </div>
 
-                    <div style="max-height: 360px; overflow-y: auto;" x-show="participants.length > 0">
-                        <template x-for="(p, idx) in participants" :key="p.id">
-                            <div class="box is-shadowless p-3 mb-2 split-participant" style="border-radius: 8px;">
-                                <div class="is-flex is-justify-content-space-between is-align-items-center">
-                                    <div class="is-flex is-align-items-center" style="flex: 1; min-width: 0;">
-                                        <span class="tag is-small mr-2 has-background-grey-lighter" x-text="idx + 1"></span>
-                                        <span class="has-text-weight-medium has-text-overflow-ellipsis" x-text="p.name" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
-                                        <span class="tag is-small ml-2"
-                                              :class="{'is-danger': p.aid_class === 'needs_help', 'is-success': p.aid_class === 'will_help', 'is-light has-text-grey-dark': p.aid_class === 'regular'}"
-                                              x-text="aidClassLabel(p.aid_class)"></span>
-                                    </div>
-                                    <div class="is-flex is-align-items-is-flex-end">
-                                        <div class="control has-icons-left mr-2" style="width: 130px;">
-                                            <input class="input is-small has-text-weight-bold" type="number" step="0.01"
-                                                   x-model="splitDollars[p.id]"
-                                                   placeholder="0.00">
-                                            <span class="icon is-left is-small"><i class="fas fa-dollar-sign"></i></span>
-                                        </div>
-                                        <button class="button is-small is-danger is-light" @click="removeParticipant(p.id)" title="Remove">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-
-                    <div class="notification is-warning is-light mt-4" x-show="getRemaining() !== 0">
-                        <i class="fas fa-exclamation-triangle mr-1"></i> Remaining: <strong x-text="formatCurrency(getRemaining())"></strong>
-                    </div>
-
-                    <div class="field is-grouped mt-5">
+                    <div class="field is-grouped is-grouped-right mt-5 pt-4" style="border-top: 1px solid var(--bulma-border);">
                         <p class="control">
-                            <button type="submit" class="button is-success" :disabled="getRemaining() !== 0 || participants.length === 0">
-                                <i class="fas fa-check mr-1"></i> Save Splits
+                            <button type="button" class="button is-ghost has-text-danger" @click="clearAndSubmit($event)" :disabled="!hasExistingSplits()">
+                                Clear Splits
                             </button>
                         </p>
                         <p class="control">
                             <button type="button" class="button is-light" @click="activeTx = null">Cancel</button>
+                        </p>
+                        <p class="control">
+                            <button type="submit" class="button is-primary" :disabled="getRemaining() !== 0 || participants.length === 0">
+                                <i class="fas fa-check mr-2"></i> Save Splits
+                            </button>
                         </p>
                     </div>
                 </form>
@@ -742,6 +579,7 @@
                     </footer>
                 </div>
             </div>
+
         </div>
     </div>
 </div>
@@ -751,13 +589,6 @@
 .card-header { border-radius: 12px 12px 0 0; border-bottom: 1px solid var(--bulma-border); background: var(--bulma-scheme-main-bis); }
 .card-header-title { font-weight: 600; }
 .split-participant { border: 1px solid var(--bulma-border); }
-[data-theme="dark"] .tag.has-text-grey-dark {
-    color: var(--bulma-text-light) !important;
-}
-[data-theme="dark"] .tag.has-background-grey-lighter {
-    color: var(--bulma-text-strong) !important;
-    background-color: var(--bulma-scheme-main-ter) !important;
-}
 </style>
 
 <script>
@@ -765,7 +596,7 @@ const allUsers = {{ .UsersJSON }};
 const allPayees = {{ .PayeesJSON }};
 const allSplits = {{ .SplitsJSON }};
 const allTransactions = {{ .TransactionsJSON }};
-const allPayments = {{ .PaymentsJSON }};
+const payeeToUserMap = {{ .PayeeToUserMapJSON }};
 
 function sortBy(arr, getValue, dir) {
     const sorted = [...arr];
@@ -877,128 +708,6 @@ function adminDashboard() {
     }
 }
 
-function paymentsTable() {
-    return {
-        payments: allPayments,
-        search: '',
-        page: 1,
-        perPage: 15,
-        sortKey: '',
-        sortDir: 'asc',
-        assignOpen: false,
-        assignTab: 'link',
-        assignPayeeId: '',
-        assignPayeeName: '',
-
-        get filteredPayments() {
-            if (!this.search) return this.payments;
-            const q = this.search.toLowerCase();
-            return this.payments.filter(p => {
-                return this.payeeName(p.payee).toLowerCase().includes(q)
-                    || (p.notes && p.notes.toLowerCase().includes(q))
-                    || (p.has_mapped_user && p.mapped_user_name.toLowerCase().includes(q))
-                    || this.formatDate(p.date).toLowerCase().includes(q)
-                    || this.formatCents(p.amount).includes(q);
-            });
-        },
-
-        get sortedPayments() {
-            if (!this.sortKey) return this.filteredPayments;
-            return sortBy(this.filteredPayments, p => {
-                if (this.sortKey === 'date') return p.date;
-                if (this.sortKey === 'payee') return this.payeeName(p.payee);
-                if (this.sortKey === 'mapped_user_name') return p.has_mapped_user ? p.mapped_user_name : '';
-                if (this.sortKey === 'amount') return p.amount;
-                return p[this.sortKey];
-            }, this.sortDir);
-        },
-
-        get paginatedPayments() {
-            const start = (this.page - 1) * this.perPage;
-            return this.sortedPayments.slice(start, start + this.perPage);
-        },
-
-        get totalPages() {
-            return Math.ceil(this.filteredPayments.length / this.perPage);
-        },
-
-        get usersWithoutPayee() {
-            return allUsers.filter(u => !u.actual_payee_id);
-        },
-
-        openAssign(payeeId, txId) {
-            this.assignPayeeId = payeeId;
-            const found = allPayees.find(p => p.id === payeeId);
-            this.assignPayeeName = found ? found.name : payeeId;
-            this.assignTab = 'link';
-            this.assignOpen = true;
-        },
-
-        linkUser(userId) {
-            const user = allUsers.find(u => u.id === userId);
-            if (!user) return;
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/admin/users/update';
-            const fields = {
-                id: userId,
-                name: user.name,
-                oidc_sub: user.oidc_sub,
-                aid_class: user.aid_class,
-                actual_payee_id: this.assignPayeeId
-            };
-            for (const [name, value] of Object.entries(fields)) {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = name;
-                input.value = value;
-                form.appendChild(input);
-            }
-            document.body.appendChild(form);
-            form.submit();
-        },
-
-        aidClassColor(cls) {
-            if (cls === 'needs_help') return 'is-danger';
-            if (cls === 'will_help') return 'is-success';
-            return 'is-light has-text-grey-dark';
-        },
-
-        aidClassLabel(cls) {
-            if (cls === 'needs_help') return 'Needs Help';
-            if (cls === 'will_help') return 'Will Help';
-            return 'Regular';
-        },
-
-        payeeName(payeeId) {
-            const p = allPayees.find(p => p.id === payeeId);
-            return p ? p.name : payeeId;
-        },
-
-        formatDate(dateStr) {
-            if (!dateStr) return '';
-            const parts = dateStr.split('-');
-            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            return months[parseInt(parts[1]) - 1] + ' ' + parseInt(parts[2]) + ', ' + parts[0];
-        },
-
-        formatCents(cents) {
-            if (cents < 0) return '-$' + (Math.abs(cents) / 100).toFixed(2);
-            return '$' + (cents / 100).toFixed(2);
-        },
-
-        setSort(key) {
-            if (this.sortKey === key) {
-                this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
-            } else {
-                this.sortKey = key;
-                this.sortDir = 'asc';
-            }
-            this.page = 1;
-        },
-    }
-}
-
 function payeeSearch(initialId = '') {
     let initialName = '';
     if (initialId !== '') {
@@ -1035,6 +744,7 @@ function splitCalculator() {
         transactions: allTransactions,
         activeTx: null,
         activeTxNote: '',
+        activeTxDate: '',
         totalAmount: 0,
         participants: [],
         splits: {},
@@ -1115,6 +825,12 @@ function splitCalculator() {
                 .slice(0, 20);
         },
 
+        aidClassColor(cls) {
+            if (cls === 'needs_help') return 'is-danger';
+            if (cls === 'will_help') return 'is-success';
+            return 'is-light has-text-grey-dark';
+        },
+
         aidClassLabel(cls) {
             if (cls === 'needs_help') return 'Needs Help';
             if (cls === 'will_help') return 'Will Help';
@@ -1136,9 +852,10 @@ function splitCalculator() {
             this.splitDollars[userId] = 0;
         },
         
-        startSplit(txId, amount, note) {
+        startSplit(txId, amount, note, date) {
             this.activeTx = txId;
             this.activeTxNote = note;
+            this.activeTxDate = date;
             this.totalAmount = Math.abs(amount);
             this.participants = [];
             this.splits = {};
@@ -1149,7 +866,7 @@ function splitCalculator() {
             const existingSplits = allSplits.filter(s => s.actual_transaction_id === txId);
             if (existingSplits.length > 0) {
                 existingSplits.forEach(s => {
-                    if (s.amount_owed <= 0) return;
+                    if (s.amount_owed < 0) return;
                     const user = this.users.find(u => u.id === s.user_id);
                     if (user) {
                         this.participants.push({ id: user.id, name: user.name, aid_class: user.aid_class });
@@ -1194,6 +911,19 @@ function splitCalculator() {
             this.txPage = 1;
         },
         
+        hasExistingSplits() {
+            return allSplits.some(s => s.actual_transaction_id === this.activeTx);
+        },
+
+        clearAndSubmit(e) {
+            if (confirm("Are you sure you want to clear all existing splits for this transaction?")) {
+                this.participants = [];
+                this.$nextTick(() => {
+                    e.target.closest('form').submit();
+                });
+            }
+        },
+        
         beforeSubmit(e) {
             for (const p of this.participants) {
                 const dollars = parseFloat(this.splitDollars[p.id]) || 0;
@@ -1203,21 +933,42 @@ function splitCalculator() {
                 input.value = Math.round(dollars * 100);
                 e.target.appendChild(input);
             }
+            if (this.participants.length === 1) {
+                const p = this.participants[0];
+                const tx = allTransactions.find(t => t.id === this.activeTx);
+                if (tx && tx.payee && !payeeToUserMap[tx.payee]) {
+                    const payeeName = this.payeeName(tx.payee);
+                    const confirmed = confirm(`Map payee "${payeeName}" to user "${p.name}"?`);
+                    if (confirmed) {
+                        const fields = [
+                            ['map_payee_to_user_id', p.id],
+                            ['payee_id_to_map', tx.payee]
+                        ];
+                        for (const [name, value] of fields) {
+                            const input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = name;
+                            input.value = value;
+                            e.target.appendChild(input);
+                        }
+                    }
+                }
+            }
         },
         
         calculateEvenly() {
             if (this.participants.length === 0) return;
             const count = this.participants.length;
-            const baseAmount = Math.floor(this.totalAmount / count);
-            let remainder = this.totalAmount % count;
+            const baseAmount = Math.trunc(this.totalAmount / count);
+            let remainder = this.totalAmount - baseAmount * count;
 
             this.participants.forEach(p => {
                 this.splits[p.id] = baseAmount;
                 this.splitDollars[p.id] = (baseAmount / 100).toFixed(2);
-                if (remainder > 0) {
-                    this.splits[p.id] += 1;
+                if (remainder !== 0) {
+                    this.splits[p.id] += Math.sign(remainder);
                     this.splitDollars[p.id] = (this.splits[p.id] / 100).toFixed(2);
-                    remainder--;
+                    remainder -= Math.sign(remainder);
                 }
             });
         },
@@ -1227,7 +978,7 @@ function splitCalculator() {
 
             const involved = this.participants;
             const count = involved.length;
-            const baseAmount = Math.floor(this.totalAmount / count);
+            const baseAmount = Math.trunc(this.totalAmount / count);
 
             let needsHelpCount = 0;
             let willHelpCount = 0;
@@ -1243,9 +994,9 @@ function splitCalculator() {
                 return this.calculateEvenly();
             }
 
-            const totalShortfall = (baseAmount * needsHelpCount) + (this.totalAmount % count);
-            const extraPerWillHelp = Math.floor(totalShortfall / willHelpCount);
-            let remainder = totalShortfall % willHelpCount;
+            const totalShortfall = (baseAmount * needsHelpCount) + (this.totalAmount - baseAmount * count);
+            const extraPerWillHelp = Math.trunc(totalShortfall / willHelpCount);
+            let remainder = totalShortfall - extraPerWillHelp * willHelpCount;
 
             involved.forEach(p => {
                 if (p.aid_class === 'needs_help') {

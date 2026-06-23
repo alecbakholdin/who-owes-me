@@ -55,6 +55,9 @@ var funcMap = template.FuncMap{
 			return "Regular"
 		}
 	},
+	"negate": func(cents int) int {
+		return -cents
+	},
 	"formatAidClassColor": func(class string) string {
 		switch class {
 		case "needs_help":
@@ -90,48 +93,91 @@ func renderError(w http.ResponseWriter, code int, message string) {
 	}{Code: code, Message: message})
 }
 
+type LedgerRow struct {
+	Date           string
+	Notes          string
+	AmountOwed     int
+	IsCredit       bool
+	RunningBalance int
+}
+
 func getUserDashboardData(user *db.User) (interface{}, error) {
 	actClient := actual.NewClient()
 	
-	deposits, _ := actClient.GetTaggedTransactionsByPayee(user.ActualPayeeID, splitTag)
-	if deposits == nil {
-		deposits = []actual.Transaction{}
-	}
-
 	splits, _ := db.GetSplitsForUser(user.ID)
 	if splits == nil {
 		splits = []db.ExpenseSplit{}
 	}
 
 	taggedTx, _ := actClient.GetTransactionsByTag(splitTag)
-	txDateMap := map[string]string{}
+	txMap := map[string]actual.Transaction{}
 	for _, t := range taggedTx {
-		txDateMap[t.ID] = t.Date
+		t.Notes = cleanNote(t.Notes)
+		txMap[t.ID] = t
 	}
 
+	var rows []LedgerRow
 	balance := 0
-	for i := range deposits {
-		deposits[i].Notes = cleanNote(deposits[i].Notes)
-		balance += deposits[i].Amount
-	}
 	for _, s := range splits {
-		balance -= s.AmountOwed
+		date := s.ExpenseDate
+		notes := s.ExpenseNote
+		isCredit := s.AutoCreated
+		if tx, ok := txMap[s.ActualTransactionID]; ok {
+			isCredit = tx.Amount > 0
+			if date == "" {
+				date = tx.Date
+			}
+			if notes == "" {
+				notes = tx.Notes
+			}
+		}
+		if date == "" {
+			date = "Unknown"
+		}
+		if notes == "" {
+			notes = "Expense Share"
+		}
+
+		rows = append(rows, LedgerRow{
+			Date:       date,
+			Notes:      notes,
+			AmountOwed: s.AmountOwed,
+			IsCredit:   isCredit,
+		})
+	}
+
+	// Sort chronologically (oldest first)
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].Date < rows[j].Date
+	})
+
+	// Calculate running balance
+	runningBalance := 0
+	for i := range rows {
+		if rows[i].IsCredit {
+			runningBalance += rows[i].AmountOwed
+		} else {
+			runningBalance -= rows[i].AmountOwed
+		}
+		rows[i].RunningBalance = runningBalance
+	}
+	balance = runningBalance
+
+	// Reverse to show newest first
+	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+		rows[i], rows[j] = rows[j], rows[i]
 	}
 
 	return struct {
-		User      *db.User
-		Deposits  []actual.Transaction
-		Splits    []db.ExpenseSplit
-		TxDateMap map[string]string
-		Balance   int
-		SplitTag  string
+		User       *db.User
+		LedgerRows []LedgerRow
+		Balance    int
+		SplitTag   string
 	}{
-		User:      user,
-		Deposits:  deposits,
-		Splits:    splits,
-		TxDateMap: txDateMap,
-		Balance:   balance,
-		SplitTag:  splitTag,
+		User:       user,
+		LedgerRows: rows,
+		Balance:    balance,
+		SplitTag:   splitTag,
 	}, nil
 }
 
@@ -181,13 +227,6 @@ type UserWithBalance struct {
 	Balance int `json:"balance"`
 }
 
-type PaymentWithUser struct {
-	actual.Transaction
-	MappedUserName       string `json:"mapped_user_name"`
-	MappedUserID         int    `json:"mapped_user_id"`
-	HasMappedUser        bool   `json:"has_mapped_user"`
-}
-
 func handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	users, _ := db.GetAllUsers()
 	if users == nil {
@@ -207,21 +246,17 @@ func handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	payeesJSON, _ := json.Marshal(payees)
 
-	// Fetch recent transactions to split, filtering by the specific tag, only expenses (negative amounts)
+	// Fetch all tagged transactions (both deposits and expenses)
 	allTagged, err := actClient.GetTransactionsByTag(splitTag)
 	if err != nil {
 		apiErrors = append(apiErrors, fmt.Sprintf("Failed to fetch transactions: %v", err))
 		fmt.Printf("Error fetching transactions: %v\n", err)
 	}
-	var recentTransactions []actual.Transaction
-	for _, t := range allTagged {
-		if t.Amount < 0 {
-			t.Notes = cleanNote(t.Notes)
-			recentTransactions = append(recentTransactions, t)
-		}
+	for i := range allTagged {
+		allTagged[i].Notes = cleanNote(allTagged[i].Notes)
 	}
-	if recentTransactions == nil {
-		recentTransactions = []actual.Transaction{}
+	if allTagged == nil {
+		allTagged = []actual.Transaction{}
 	}
 
 	var usersWithBalance []UserWithBalance
@@ -230,91 +265,9 @@ func handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		payeeToUser[u.ActualPayeeID] = u
 	}
 
-	seenTx := map[string]bool{}
-	var payments []PaymentWithUser
-	for _, u := range users {
-		balance := 0
-		
-		// 1. Add all Actual Budget transactions associated with this user's Payee
-		deposits, _ := actClient.GetTaggedTransactionsByPayee(u.ActualPayeeID, splitTag)
-		for _, d := range deposits {
-			if seenTx[d.ID] {
-				continue
-			}
-			seenTx[d.ID] = true
-			balance += d.Amount // Positive for deposits/income, negative if refunded
-
-			// Positive amounts are payments (deposits)
-			if d.Amount > 0 {
-				d.Notes = cleanNote(d.Notes)
-				payments = append(payments, PaymentWithUser{
-					Transaction:    d,
-					MappedUserName: u.Name,
-					MappedUserID:   u.ID,
-					HasMappedUser:  true,
-				})
-			}
-		}
-		
-		// 2. Subtract all splits they owe
-		splits, _ := db.GetSplitsForUser(u.ID)
-		for _, s := range splits {
-			balance -= s.AmountOwed
-		}
-		
-		usersWithBalance = append(usersWithBalance, UserWithBalance{
-			User:    u,
-			Balance: balance,
-		})
-	}
-
-	// Also collect payee transactions that aren't mapped to any user
-	for _, p := range payees {
-		if _, ok := payeeToUser[p.ID]; ok {
-			continue // already handled above
-		}
-		orphanTx, _ := actClient.GetTaggedTransactionsByPayee(p.ID, splitTag)
-		for _, d := range orphanTx {
-			if seenTx[d.ID] {
-				continue
-			}
-			seenTx[d.ID] = true
-			if d.Amount > 0 {
-				d.Notes = cleanNote(d.Notes)
-				payments = append(payments, PaymentWithUser{
-					Transaction:   d,
-					HasMappedUser: false,
-				})
-			}
-		}
-	}
-
-	// Sort: unmapped first, then by date descending (most recent first)
-	sort.Slice(payments, func(i, j int) bool {
-		if payments[i].HasMappedUser != payments[j].HasMappedUser {
-			return !payments[i].HasMappedUser // unmapped first
-		}
-		return payments[i].Date > payments[j].Date // most recent first
-	})
-
-	paymentsJSON, _ := json.Marshal(payments)
-
-	usersJSON, _ := json.Marshal(usersWithBalance)
-
 	allSplits, _ := db.GetAllSplits()
 	if allSplits == nil {
 		allSplits = []db.ExpenseSplit{}
-	}
-	splitsJSON, _ := json.Marshal(allSplits)
-
-	payeeNameMap := map[string]string{}
-	for _, p := range payees {
-		payeeNameMap[p.ID] = p.Name
-	}
-
-	transactionsJSON, err := json.Marshal(recentTransactions)
-	if err != nil {
-		transactionsJSON = []byte("[]")
 	}
 
 	splitTxSet := map[string]bool{}
@@ -322,34 +275,93 @@ func handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		splitTxSet[s.ActualTransactionID] = true
 	}
 
+	// Auto-split: for any positive transaction without a split whose payee maps to a user,
+	// create a split for the full amount
+	for _, tx := range allTagged {
+		if splitTxSet[tx.ID] {
+			continue
+		}
+		if user, ok := payeeToUser[tx.Payee]; ok {
+			if tx.Amount > 0 {
+				db.SetAutoSplit(tx.ID, user.ID, tx.Amount, tx.Date, tx.Notes)
+				splitTxSet[tx.ID] = true
+			}
+		}
+	}
+
+	// Re-read splits after auto-split
+	allSplits, _ = db.GetAllSplits()
+	if allSplits == nil {
+		allSplits = []db.ExpenseSplit{}
+	}
+
+	txMap := map[string]actual.Transaction{}
+	for _, t := range allTagged {
+		txMap[t.ID] = t
+	}
+
+	// Calculate balances from splits
+	for _, u := range users {
+		balance := 0
+		for _, s := range allSplits {
+			if s.UserID == u.ID {
+				isCredit := s.AutoCreated
+				if tx, ok := txMap[s.ActualTransactionID]; ok {
+					isCredit = tx.Amount > 0
+				}
+				if isCredit {
+					balance += s.AmountOwed
+				} else {
+					balance -= s.AmountOwed
+				}
+			}
+		}
+		usersWithBalance = append(usersWithBalance, UserWithBalance{
+			User:    u,
+			Balance: balance,
+		})
+	}
+
+	usersJSON, _ := json.Marshal(usersWithBalance)
+
+	// Build payee-to-user map for the frontend
+	payeeToUserMap := map[string]int{}
+	for _, u := range users {
+		if u.ActualPayeeID != "" {
+			payeeToUserMap[u.ActualPayeeID] = u.ID
+		}
+	}
+	payeeToUserMapJSON, _ := json.Marshal(payeeToUserMap)
+
+	splitsJSON, _ := json.Marshal(allSplits)
+	transactionsJSON, _ := json.Marshal(allTagged)
+
 	data := struct {
-		Users             []UserWithBalance
-		UsersJSON         template.JS
-		Payees            []actual.Payee
-		PayeesJSON        template.JS
-		Transactions      []actual.Transaction
-		TransactionsJSON  template.JS
-		PaymentsJSON      template.JS
-		SplitsJSON        template.JS
-		Error             string
-		APIErrors         []string
-		PayeeNames        map[string]string
-		SplitTxSet        map[string]bool
-		SplitTag          string
+		Users              []UserWithBalance
+		UsersJSON          template.JS
+		Payees             []actual.Payee
+		PayeesJSON         template.JS
+		Transactions       []actual.Transaction
+		TransactionsJSON   template.JS
+		SplitsJSON         template.JS
+		Error              string
+		APIErrors          []string
+		PayeeToUserMapJSON template.JS
+		SplitTxSet         map[string]bool
+		SplitTag           string
 	}{
-		Users:            usersWithBalance,
-		UsersJSON:        template.JS(usersJSON),
-		Payees:           payees,
-		PayeesJSON:       template.JS(payeesJSON),
-		Transactions:     recentTransactions,
-		TransactionsJSON: template.JS(transactionsJSON),
-		PaymentsJSON:     template.JS(paymentsJSON),
-		SplitsJSON:       template.JS(splitsJSON),
-		Error:            r.URL.Query().Get("error"),
-		APIErrors:        apiErrors,
-		PayeeNames:       payeeNameMap,
-		SplitTxSet:       splitTxSet,
-		SplitTag:         splitTag,
+		Users:              usersWithBalance,
+		UsersJSON:          template.JS(usersJSON),
+		Payees:             payees,
+		PayeesJSON:         template.JS(payeesJSON),
+		Transactions:       allTagged,
+		TransactionsJSON:   template.JS(transactionsJSON),
+		SplitsJSON:         template.JS(splitsJSON),
+		Error:              r.URL.Query().Get("error"),
+		APIErrors:          apiErrors,
+		PayeeToUserMapJSON: template.JS(payeeToUserMapJSON),
+		SplitTxSet:         splitTxSet,
+		SplitTag:           splitTag,
 	}
 
 	renderTemplate(w, "admin.html", data)
@@ -437,10 +449,16 @@ func handleCreateSplits(w http.ResponseWriter, r *http.Request) {
 	}
 
 	txID := r.FormValue("actual_transaction_id")
+	txDate := r.FormValue("actual_transaction_date")
+	txNote := r.FormValue("actual_transaction_note")
 	if txID == "" {
 		http.Error(w, "Transaction ID is required", http.StatusBadRequest)
 		return
 	}
+
+	// Always clear existing splits first so removed participants are actually deleted,
+	// and "Clear Splits" action can just submit an empty list.
+	db.ClearSplitsForTx(txID)
 
 	// Read dynamic form fields: split_amount_USERID=AMOUNT
 	for key, values := range r.Form {
@@ -457,8 +475,20 @@ func handleCreateSplits(w http.ResponseWriter, r *http.Request) {
 				amount = 0
 			}
 
-			// Save to DB (SetSplit handles upsert or delete if <= 0)
-			db.SetSplit(txID, userID, amount)
+			db.SetSplit(txID, userID, amount, txDate, txNote)
+		}
+	}
+
+	// Optional: map a payee to a user (one-user-save popup)
+	mapUserIDStr := r.FormValue("map_payee_to_user_id")
+	payeeIDToMap := r.FormValue("payee_id_to_map")
+	if mapUserIDStr != "" && payeeIDToMap != "" {
+		mapUserID, err := strconv.Atoi(mapUserIDStr)
+		if err == nil {
+			existingUser, err := db.GetUserByID(mapUserID)
+			if err == nil {
+				db.UpdateUser(existingUser.ID, existingUser.Name, existingUser.OIDCSub, existingUser.AidClass, payeeIDToMap)
+			}
 		}
 	}
 

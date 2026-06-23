@@ -8,12 +8,25 @@
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.0/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        [data-theme="dark"] .tag.has-text-grey-dark {
+            color: var(--bulma-text-strong) !important;
+            background-color: var(--bulma-scheme-main-ter) !important;
+        }
+        [data-theme="dark"] .tag.has-background-grey-lighter {
+            color: var(--bulma-text-strong) !important;
+            background-color: var(--bulma-scheme-main-ter) !important;
+        }
+    </style>
     <script>
         (function() {
             var theme = localStorage.getItem('theme');
             if (theme === 'dark') {
                 document.documentElement.setAttribute('data-theme', 'dark');
+            } else if (theme === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
             } else {
+                // Remove to allow OS preference
                 document.documentElement.removeAttribute('data-theme');
             }
         })();
@@ -60,7 +73,7 @@
                 e.preventDefault();
                 var current = html.getAttribute('data-theme');
                 if (current === 'dark') {
-                    html.removeAttribute('data-theme');
+                    html.setAttribute('data-theme', 'light');
                     localStorage.setItem('theme', 'light');
                     updateIcon('');
                 } else {

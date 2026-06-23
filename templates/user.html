@@ -29,28 +29,28 @@
                     <th>Date</th>
                     <th style="max-width: 400px;">Note</th>
                     <th class="has-text-right">Amount</th>
+                    <th class="has-text-right">Balance</th>
                 </tr>
             </thead>
             <tbody>
-                {{ range .Deposits }}
+                {{ range .LedgerRows }}
                 <tr>
-                    <td class="has-text-grey">{{ formatDate .Date }}</td>
-                    <td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ .Notes }}</td>
-                    <td class="has-text-right has-text-weight-bold has-text-success">+{{ formatMoney .Amount }}</td>
+                    <td class="has-text-grey">{{ if eq .Date "Unknown" }}Unknown{{ else }}{{ formatDate .Date }}{{ end }}</td>
+                    <td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        {{ .Notes }}
+                    </td>
+                    <td class="has-text-right has-text-weight-bold {{ if .IsCredit }}has-text-success{{ else }}has-text-danger{{ end }}">
+                        {{ if .IsCredit }}+{{ formatMoney .AmountOwed }}{{ else }}-{{ formatMoney .AmountOwed }}{{ end }}
+                    </td>
+                    <td class="has-text-right has-text-grey">
+                        {{ formatMoney .RunningBalance }}
+                    </td>
                 </tr>
                 {{ end }}
 
-                {{ range .Splits }}
+                {{ if eq (len .LedgerRows) 0 }}
                 <tr>
-                    <td class="has-text-grey">{{ index $.TxDateMap .ActualTransactionID }}</td>
-                    <td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Expense Share</td>
-                    <td class="has-text-right has-text-weight-bold has-text-danger">-{{ formatMoney .AmountOwed }}</td>
-                </tr>
-                {{ end }}
-
-                {{ if and (eq (len .Deposits) 0) (eq (len .Splits) 0) }}
-                <tr>
-                    <td colspan="3" class="has-text-centered has-text-grey py-5">
+                    <td colspan="4" class="has-text-centered has-text-grey py-5">
                         <i class="fas fa-inbox fa-2x mb-2" style="display: block;"></i>
                         No transactions yet
                     </td>
