@@ -130,6 +130,27 @@ func GetUserByID(id int) (*User, error) {
 	return &u, nil
 }
 
+func DeleteUser(id int) error {
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Delete associated splits first
+	_, err = tx.Exec("DELETE FROM expense_splits WHERE user_id = ?", id)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("DELETE FROM users WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
 func GetAllUsers() ([]User, error) {
 	rows, err := DB.Query("SELECT id, name, oidc_sub, aid_class, actual_payee_id FROM users")
 	if err != nil {

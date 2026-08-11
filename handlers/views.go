@@ -425,6 +425,22 @@ func handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin", http.StatusFound)
 }
 
+func handleDeleteUser(w http.ResponseWriter, r *http.Request) {
+	idStr := r.FormValue("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := db.DeleteUser(id); err != nil {
+		http.Redirect(w, r, "/admin?error=Failed to delete user", http.StatusFound)
+		return
+	}
+
+	http.Redirect(w, r, "/admin", http.StatusFound)
+}
+
 func handleGetPayees(w http.ResponseWriter, r *http.Request) {
 	actClient := actual.NewClient()
 	payees, err := actClient.GetPayees()

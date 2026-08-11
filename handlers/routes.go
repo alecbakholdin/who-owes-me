@@ -32,6 +32,7 @@ func RegisterRoutes(r chi.Router) {
 				r.Get("/admin", handleAdminDashboard)
 				r.Post("/admin/users", handleCreateUser)
 				r.Post("/admin/users/update", handleUpdateUser)
+				r.Post("/admin/users/delete", handleDeleteUser)
 				r.Post("/admin/splits", handleCreateSplits)
 				r.Get("/admin/payees", handleGetPayees) // HTMX endpoint
 				r.Post("/admin/refresh", handleRefreshCache)

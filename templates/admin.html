@@ -195,6 +195,9 @@
                         <i class="fas fa-users mr-2"></i> Current Users
                     </p>
                     <div class="card-header-icon" style="flex: 1; justify-content: flex-end;">
+                        <button class="button is-small is-light mr-2" @click="copyUsersTable()" title="Copy table to clipboard">
+                            <i class="fas fa-copy"></i>
+                        </button>
                         <input class="input is-small" type="text" x-model="userSearch" placeholder="Search users..." style="max-width: 240px;">
                     </div>
                 </header>
@@ -231,8 +234,11 @@
                                     <td><span class="tag is-small" :class="aidClassColor(u.aid_class)" x-text="aidClassLabel(u.aid_class)"></span></td>
                                     <td class="has-text-right has-text-weight-bold" :class="u.balance < 0 ? 'has-text-danger' : u.balance > 0 ? 'has-text-success' : ''" x-text="formatCents(u.balance)"></td>
                                     <td>
-                                        <button class="button is-small is-light" @click="openEditModal(u.id, u.name, u.oidc_sub, u.aid_class, u.actual_payee_id)">
+                                        <button class="button is-small is-light mr-1" @click="openEditModal(u.id, u.name, u.oidc_sub, u.aid_class, u.actual_payee_id)">
                                             <i class="fas fa-pen"></i>
+                                        </button>
+                                        <button class="button is-small is-danger is-light" @click="confirmDeleteUser(u.id, u.name)">
+                                            <i class="fas fa-trash"></i>
                                         </button>
                                     </td>
                                 </tr>
@@ -243,8 +249,8 @@
                     </tbody>
                 </table>
                     </div>
-                    <div class="px-3 py-3 is-flex is-justify-content-space-between is-align-items-center" x-show="totalUserPages > 1" style="border-top: 1px solid var(--bulma-border);">
-                        <div class="field has-addons">
+                    <div class="px-3 py-3 is-flex is-justify-content-space-between is-align-items-center" x-show="filteredUsers.length > 0" style="border-top: 1px solid var(--bulma-border);">
+                        <div class="field has-addons" x-show="totalUserPages > 1">
                             <p class="control">
                                 <button class="button is-small" :disabled="userPage === 1" @click="userPage--">
                                     <i class="fas fa-chevron-left"></i>
@@ -256,7 +262,15 @@
                                 </button>
                             </p>
                         </div>
-                        <span class="has-text-grey is-size-7" x-text="'Page ' + userPage + ' of ' + totalUserPages"></span>
+                        <span class="has-text-grey is-size-7" x-show="totalUserPages > 1" x-text="'Page ' + userPage + ' of ' + totalUserPages"></span>
+                        <div class="select is-small ml-3">
+                            <select x-model.number="userPerPage" @change="userPage = 1">
+                                <option value="10">10</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
                 </div>
             </div>
 
@@ -351,6 +365,9 @@
                     <i class="fas fa-receipt mr-2"></i> Recent Transactions <span class="tag is-info is-light ml-2">{{ .SplitTag }}</span>
                 </p>
                 <div class="card-header-icon" style="flex: 1; justify-content: flex-end;">
+                    <button class="button is-small is-light mr-2" @click="copyTransactionsTable()" title="Copy table to clipboard">
+                        <i class="fas fa-copy"></i>
+                    </button>
                     <input class="input is-small" type="text" x-model="txSearch" placeholder="Search transactions..." style="max-width: 240px;">
                 </div>
             </header>
@@ -404,8 +421,8 @@
                     </tbody>
                 </table>
                 </div>
-                <div class="px-3 py-3 is-flex is-justify-content-space-between is-align-items-center" x-show="totalTxPages > 1" style="border-top: 1px solid var(--bulma-border);">
-                    <div class="field has-addons">
+                <div class="px-3 py-3 is-flex is-justify-content-space-between is-align-items-center" x-show="filteredTransactions.length > 0" style="border-top: 1px solid var(--bulma-border);">
+                    <div class="field has-addons" x-show="totalTxPages > 1">
                         <p class="control">
                             <button class="button is-small" :disabled="txPage === 1" @click="txPage--">
                                 <i class="fas fa-chevron-left"></i>
@@ -417,7 +434,15 @@
                             </button>
                         </p>
                     </div>
-                    <span class="has-text-grey is-size-7" x-text="'Page ' + txPage + ' of ' + totalTxPages"></span>
+                    <span class="has-text-grey is-size-7" x-show="totalTxPages > 1" x-text="'Page ' + txPage + ' of ' + totalTxPages"></span>
+                    <div class="select is-small ml-3">
+                        <select x-model.number="txPerPage" @change="txPage = 1">
+                            <option value="15">15</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             
@@ -704,6 +729,32 @@ function adminDashboard() {
                 this.userSortDir = 'asc';
             }
             this.userPage = 1;
+        },
+
+        confirmDeleteUser(id, name) {
+            if (confirm(`Are you sure you want to delete user "${name}"? This will also remove all their expense splits and cannot be undone.`)) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/admin/users/delete';
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'id';
+                input.value = id;
+                form.appendChild(input);
+                document.body.appendChild(form);
+                form.submit();
+            }
+        },
+
+        copyUsersTable() {
+            const headers = ['Name', 'AID Class', 'Balance'];
+            const rows = this.sortedUsers.map(u => [
+                u.name,
+                this.aidClassLabel(u.aid_class),
+                this.formatCents(u.balance)
+            ]);
+            const tsv = [headers, ...rows].map(r => r.join('\t')).join('\n');
+            navigator.clipboard.writeText(tsv);
         },
     }
 }
@@ -1052,6 +1103,18 @@ function splitCalculator() {
             this.showImportModal = false;
             this.importText = '';
             this.importResults = null;
+        },
+
+        copyTransactionsTable() {
+            const headers = ['Date', 'Payee', 'Note', 'Total'];
+            const rows = this.sortedTransactions.map(t => [
+                this.formatDate(t.date),
+                this.payeeName(t.payee),
+                t.notes || '',
+                this.formatCents(t.amount)
+            ]);
+            const tsv = [headers, ...rows].map(r => r.join('\t')).join('\n');
+            navigator.clipboard.writeText(tsv);
         }
     }
 }
