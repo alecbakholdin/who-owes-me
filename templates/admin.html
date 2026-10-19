@@ -470,6 +470,9 @@
                     <button type="button" class="button is-small is-link is-light" @click="calculateEvenlyWithAid()">
                         <i class="fas fa-hand-holding-heart mr-1"></i> Evenly w/ Aid
                     </button>
+                    <button type="button" class="button is-small is-primary is-light" @click="calculateByWeight()">
+                        <i class="fas fa-scale-balanced mr-1"></i> By Weight
+                    </button>
                 </div>
 
                 <form action="/admin/splits" method="POST" @submit="beforeSubmit">
@@ -501,6 +504,15 @@
                                           x-text="aidClassLabel(p.aid_class)"></span>
                                 </div>
                                 <div class="is-flex is-align-items-center ml-2" style="flex-shrink: 0;">
+                                    <div class="control mr-2" style="width: 80px;">
+                                        <input class="input is-small has-text-right" type="number" min="0" step="0.1"
+                                               x-model.number="weights[p.id]"
+                                               @change="saveWeightOverride(p.id, weights[p.id])"
+                                               placeholder="1.0" title="Weight (defaults by aid class)">
+                                    </div>
+                                    <button type="button" class="button is-small is-ghost has-text-grey px-1" @click="clearWeightOverride(p.id)" title="Reset weight to aid class default">
+                                        <i class="fas fa-undo-alt"></i>
+                                    </button>
                                     <div class="control has-icons-left mr-2" style="width: 110px;">
                                         <input class="input is-small has-text-weight-bold has-text-right" type="number" step="0.01"
                                                x-model="splitDollars[p.id]"
@@ -800,6 +812,7 @@ function splitCalculator() {
         participants: [],
         splits: {},
         splitDollars: {},
+        weights: {},
 
         addSearch: '',
         addSearchOpen: false,
@@ -895,12 +908,14 @@ function splitCalculator() {
                 this.splits[user.id] = 0;
                 this.splitDollars[user.id] = 0;
             }
+            this.weights[user.id] = this.resolveWeight(user.id, user.aid_class);
         },
 
         removeParticipant(userId) {
             this.participants = this.participants.filter(p => p.id !== userId);
             this.splits[userId] = 0;
             this.splitDollars[userId] = 0;
+            delete this.weights[userId];
         },
         
         startSplit(txId, amount, note, date) {
@@ -911,6 +926,7 @@ function splitCalculator() {
             this.participants = [];
             this.splits = {};
             this.splitDollars = {};
+            this.weights = {};
             this.importResults = null;
             this.importText = '';
 
@@ -923,6 +939,7 @@ function splitCalculator() {
                         this.participants.push({ id: user.id, name: user.name, aid_class: user.aid_class });
                         this.splits[user.id] = s.amount_owed;
                         this.splitDollars[user.id] = (s.amount_owed / 100).toFixed(2);
+                        this.weights[user.id] = this.resolveWeight(user.id, user.aid_class);
                     }
                 });
             }
@@ -1068,6 +1085,91 @@ function splitCalculator() {
             });
         },
 
+        weightStorageKey(userId) {
+            return 'wom_weight_override_' + userId;
+        },
+
+        defaultWeightForAidClass(aidClass) {
+            if (aidClass === 'needs_help') return 0.5;
+            if (aidClass === 'will_help') return 1.5;
+            return 1.0;
+        },
+
+        readWeightOverride(userId) {
+            try {
+                const raw = localStorage.getItem(this.weightStorageKey(userId));
+                if (raw === null) return null;
+                const val = Number(raw);
+                if (Number.isFinite(val) && val >= 0) return val;
+                return null;
+            } catch (e) {
+                return null;
+            }
+        },
+
+        resolveWeight(userId, aidClass) {
+            const override = this.readWeightOverride(userId);
+            return override !== null ? override : this.defaultWeightForAidClass(aidClass);
+        },
+
+        saveWeightOverride(userId, value) {
+            const val = Number(value);
+            if (!Number.isFinite(val) || val < 0) {
+                // Invalid or empty input means "no override" - revert to class default
+                this.clearWeightOverride(userId);
+                return;
+            }
+            try {
+                localStorage.setItem(this.weightStorageKey(userId), String(val));
+                this.weights[userId] = val;
+            } catch (e) {
+                // Storage unavailable (e.g. private browsing) - fall back to class default
+                this.clearWeightOverride(userId);
+            }
+        },
+
+        clearWeightOverride(userId) {
+            try {
+                localStorage.removeItem(this.weightStorageKey(userId));
+            } catch (e) { /* storage unavailable */ }
+            const p = this.participants.find(p => p.id === userId);
+            this.weights[userId] = this.defaultWeightForAidClass(p ? p.aid_class : 'regular');
+        },
+
+        calculateByWeight() {
+            if (this.participants.length === 0) return;
+
+            const totalWeight = this.participants.reduce((sum, p) => {
+                const w = Number(this.weights[p.id]);
+                return sum + (Number.isFinite(w) && w > 0 ? w : 0);
+            }, 0);
+
+            if (totalWeight === 0) {
+                return this.calculateEvenly();
+            }
+
+            let remainder = this.totalAmount;
+            this.participants.forEach(p => {
+                const w = Number(this.weights[p.id]);
+                const weight = Number.isFinite(w) && w >= 0 ? w : 0;
+                const amount = Math.trunc((this.totalAmount * weight) / totalWeight);
+                this.splits[p.id] = amount;
+                remainder -= amount;
+            });
+
+            // Distribute remainder cents one at a time in participant order,
+            // skipping zero-weight participants so they receive exactly $0.00
+            this.participants.forEach(p => {
+                const w = Number(this.weights[p.id]);
+                const weight = Number.isFinite(w) && w >= 0 ? w : 0;
+                if (remainder !== 0 && weight > 0) {
+                    this.splits[p.id] += Math.sign(remainder);
+                    remainder -= Math.sign(remainder);
+                }
+                this.splitDollars[p.id] = (this.splits[p.id] / 100).toFixed(2);
+            });
+        },
+
         previewImport() {
             const names = this.importText
                 .split(/[\n,]+/)
@@ -1099,6 +1201,7 @@ function splitCalculator() {
                     this.splits[u.id] = 0;
                     this.splitDollars[u.id] = 0;
                 }
+                this.weights[u.id] = this.resolveWeight(u.id, u.aid_class);
             });
             this.showImportModal = false;
             this.importText = '';

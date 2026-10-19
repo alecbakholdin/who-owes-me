@@ -8,3 +8,4 @@ test-env/actual
 test-env/actual-api-data
 test-env/data
 test-env/authelia/db.sqlite3
+.playwright-mcp
