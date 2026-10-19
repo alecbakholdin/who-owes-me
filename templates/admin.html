@@ -599,11 +599,11 @@
                         <textarea class="textarea" x-model="importText" rows="8" placeholder="Alice&#10;Bob&#10;Bill Sanborn, 2"></textarea>
                         
                         <div x-show="importResults" class="mt-4">
-                            <div class="notification is-success is-light py-3" x-show="importResults.found.length > 0">
-                                <i class="fas fa-check-circle mr-1"></i> Found: <strong x-text="importResults.found.length"></strong> match(es)
+                            <div class="notification is-success is-light py-3" x-show="importResults && importResults.found.length > 0">
+                                <i class="fas fa-check-circle mr-1"></i> Found: <strong x-text="importResults ? importResults.found.length : 0"></strong> match(es)
                             </div>
-                            <div class="notification is-warning is-light py-3" x-show="importResults.skipped.length > 0">
-                                <i class="fas fa-exclamation-triangle mr-1"></i> Skipped (not found): <span x-text="importResults.skipped.join(', ')"></span>
+                            <div class="notification is-warning is-light py-3" x-show="importResults && importResults.skipped.length > 0">
+                                <i class="fas fa-exclamation-triangle mr-1"></i> Skipped (not found): <span x-text="importResults ? importResults.skipped.join(', ') : ''"></span>
                             </div>
                         </div>
                     </section>
