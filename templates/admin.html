@@ -473,6 +473,9 @@
                     <button type="button" class="button is-small is-primary is-light" @click="calculateByWeight()">
                         <i class="fas fa-scale-balanced mr-1"></i> By Weight
                     </button>
+                    <button type="button" class="button is-small is-link is-light" @click="calculateByWeightWithAid()">
+                        <i class="fas fa-scale-unbalanced mr-1"></i> By Weight w/ Aid
+                    </button>
                 </div>
 
                 <form action="/admin/splits" method="POST" @submit="beforeSubmit">
@@ -592,8 +595,8 @@
                         <button class="delete" @click="showImportModal = false"></button>
                     </header>
                     <section class="modal-card-body">
-                        <p class="mb-3">Paste participant names below (one per line, or comma-separated):</p>
-                        <textarea class="textarea" x-model="importText" rows="8" placeholder="Alice&#10;Bob&#10;Charlie"></textarea>
+                        <p class="mb-3">Paste participants below — one per line. Optionally add a weight after a comma:</p>
+                        <textarea class="textarea" x-model="importText" rows="8" placeholder="Alice&#10;Bob&#10;Bill Sanborn, 2"></textarea>
                         
                         <div x-show="importResults" class="mt-4">
                             <div class="notification is-success is-light py-3" x-show="importResults.found.length > 0">
@@ -1090,8 +1093,7 @@ function splitCalculator() {
         },
 
         defaultWeightForAidClass(aidClass) {
-            if (aidClass === 'needs_help') return 0.5;
-            if (aidClass === 'will_help') return 1.5;
+            // Everyone defaults to a neutral weight of 1; aid classes only affect the aid helpers
             return 1.0;
         },
 
@@ -1136,24 +1138,21 @@ function splitCalculator() {
             this.weights[userId] = this.defaultWeightForAidClass(p ? p.aid_class : 'regular');
         },
 
-        calculateByWeight() {
-            if (this.participants.length === 0) return;
-
+        weightedShares() {
+            // Exact-penny weighted allocation; returns null when all weights are zero
             const totalWeight = this.participants.reduce((sum, p) => {
                 const w = Number(this.weights[p.id]);
                 return sum + (Number.isFinite(w) && w > 0 ? w : 0);
             }, 0);
+            if (totalWeight === 0) return null;
 
-            if (totalWeight === 0) {
-                return this.calculateEvenly();
-            }
-
+            const shares = {};
             let remainder = this.totalAmount;
             this.participants.forEach(p => {
                 const w = Number(this.weights[p.id]);
                 const weight = Number.isFinite(w) && w >= 0 ? w : 0;
                 const amount = Math.trunc((this.totalAmount * weight) / totalWeight);
-                this.splits[p.id] = amount;
+                shares[p.id] = amount;
                 remainder -= amount;
             });
 
@@ -1163,30 +1162,103 @@ function splitCalculator() {
                 const w = Number(this.weights[p.id]);
                 const weight = Number.isFinite(w) && w >= 0 ? w : 0;
                 if (remainder !== 0 && weight > 0) {
-                    this.splits[p.id] += Math.sign(remainder);
+                    shares[p.id] += Math.sign(remainder);
                     remainder -= Math.sign(remainder);
                 }
-                this.splitDollars[p.id] = (this.splits[p.id] / 100).toFixed(2);
+            });
+            return shares;
+        },
+
+        applyShares(shares) {
+            this.participants.forEach(p => {
+                this.splits[p.id] = shares[p.id];
+                this.splitDollars[p.id] = (shares[p.id] / 100).toFixed(2);
             });
         },
 
+        calculateByWeight() {
+            if (this.participants.length === 0) return;
+            const shares = this.weightedShares();
+            if (shares === null) return this.calculateEvenly();
+            this.applyShares(shares);
+        },
+
+        calculateByWeightWithAid() {
+            if (this.participants.length === 0) return;
+            const shares = this.weightedShares();
+            if (shares === null) return this.calculateEvenly();
+
+            const needsHelp = this.participants.filter(p => p.aid_class === 'needs_help');
+            const willHelp = this.participants.filter(p => p.aid_class === 'will_help');
+            const willWeightTotal = willHelp.reduce((sum, p) => {
+                const w = Number(this.weights[p.id]);
+                return sum + (Number.isFinite(w) && w > 0 ? w : 0);
+            }, 0);
+
+            // Without needs_help (or with no positive-weight will_help to absorb),
+            // plain weighted distribution already handles the mix
+            if (needsHelp.length === 0 || willWeightTotal === 0) {
+                return this.applyShares(shares);
+            }
+
+            // Zero out needs_help and hand their shortfall to will_help, proportional to weight
+            let shortfall = 0;
+            needsHelp.forEach(p => {
+                shortfall += shares[p.id];
+                shares[p.id] = 0;
+            });
+
+            let remainder = shortfall;
+            willHelp.forEach(p => {
+                const w = Number(this.weights[p.id]);
+                const weight = Number.isFinite(w) && w >= 0 ? w : 0;
+                const extra = Math.trunc((shortfall * weight) / willWeightTotal);
+                shares[p.id] += extra;
+                remainder -= extra;
+            });
+            willHelp.forEach(p => {
+                const w = Number(this.weights[p.id]);
+                const weight = Number.isFinite(w) && w >= 0 ? w : 0;
+                if (remainder !== 0 && weight > 0) {
+                    shares[p.id] += Math.sign(remainder);
+                    remainder -= Math.sign(remainder);
+                }
+            });
+
+            this.applyShares(shares);
+        },
+
         previewImport() {
-            const names = this.importText
-                .split(/[\n,]+/)
-                .map(s => s.trim())
-                .filter(s => s.length > 0);
+            const rows = this.importText
+                .split(/\n+/)
+                .map(line => {
+                    const parts = line.split(',');
+                    if (parts.length < 2) {
+                        return { name: parts[0].trim(), weight: null };
+                    }
+                    const name = parts[0].trim();
+                    const weightStr = parts[1].trim();
+                    const weight = Number(weightStr);
+                    if (weightStr !== '' && Number.isFinite(weight) && weight >= 0) {
+                        return { name, weight };
+                    }
+                    // Second column is not a weight - treat commas as name separators (legacy list form)
+                    return parts.map(s => ({ name: s.trim(), weight: null }));
+                })
+                .flat()
+                .filter(r => r.name.length > 0);
 
             const found = [];
             const skipped = [];
             const existingIds = new Set(this.participants.map(p => p.id));
 
-            names.forEach(name => {
-                const lower = name.toLowerCase();
+            rows.forEach(row => {
+                const lower = row.name.toLowerCase();
                 const match = this.users.find(u => u.name && u.name.toLowerCase() === lower && !existingIds.has(u.id));
                 if (match) {
-                    found.push(match);
+                    found.push({ user: match, weight: row.weight });
                 } else {
-                    skipped.push(name);
+                    skipped.push(row.name);
                 }
             });
 
@@ -1195,13 +1267,18 @@ function splitCalculator() {
 
         confirmImport() {
             if (!this.importResults) return;
-            this.importResults.found.forEach(u => {
+            this.importResults.found.forEach(item => {
+                const u = item.user;
                 this.participants.push({ id: u.id, name: u.name, aid_class: u.aid_class });
                 if (!(u.id in this.splits)) {
                     this.splits[u.id] = 0;
                     this.splitDollars[u.id] = 0;
                 }
-                this.weights[u.id] = this.resolveWeight(u.id, u.aid_class);
+                if (item.weight !== null) {
+                    this.saveWeightOverride(u.id, item.weight);
+                } else {
+                    this.weights[u.id] = this.resolveWeight(u.id, u.aid_class);
+                }
             });
             this.showImportModal = false;
             this.importText = '';

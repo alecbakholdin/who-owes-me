@@ -9,7 +9,7 @@ Splitting an expense today means either accepting the fixed "Evenly" or "Evenly 
 UI-only change — no database schema changes, no backend or API changes. The existing split dialog gains a third allocation helper:
 
 - A **"By Weight"** button in the split dialog, next to "Evenly" and "Evenly w/ Aid", that fills each participant's amount proportionally to a weight.
-- **Default weights per aid class**: `needs_help` = 0.5, `regular` = 1.0, `will_help` = 1.5. (Assumption: defaults chosen to make needs-help pay half of a regular share; adjustable per user below.)
+- **Default weight**: 1.0 for every user regardless of aid class, so untouched weights behave like an even split; aid classes only affect the aid helpers. (Assumption: neutral default, adjustable per user below.)
 - **Per-user overrides**: each participant row in the dialog shows an editable weight (initialized from the user's override or their class default). Editing it persists an override in the browser's localStorage — no server or schema changes. A reset control clears the override back to the class default.
 - Remainder cents from rounding are distributed one cent at a time in participant order, matching the existing even-distribution helper.
 - **Non-goals**: payments/credits keep the existing auto-credit behavior; "Evenly" and "Evenly w/ Aid" remain unchanged; no new settings page — overrides live in the split dialog only.
